@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shared House — Booking Calendar</title>
+<style>
+  :root{
+    --bg:#ffffff; --ink:#1a1a1a; --muted:#9a9a9a; --line:#e5e5e5;
+    --circle-border:#d5d5d5; --panel:#fafafa; --danger:#b6482f; --ok:#2f6b46;
+    --select-blue:#2F6FE0; --pending-grey:#c9c9c9; --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px;}
+
+  header.app-header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;padding-bottom:18px;border-bottom:1px solid var(--line);margin-bottom:18px;}
+  .title h1{font-size:22px;margin:0 0 4px;font-weight:700;letter-spacing:-0.01em;}
+  .title p{margin:0;color:var(--muted);font-size:13px;}
+  .auth-box{display:flex;align-items:center;gap:10px;font-size:13px;}
+  .who{display:flex;align-items:center;gap:8px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none;}
+  button{font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;border-radius:8px;padding:8px 14px;border:1px solid var(--ink);background:var(--ink);color:#fff;transition:opacity .15s;}
+  button.secondary{background:#fff;color:var(--ink);}
+  button.ghost{background:transparent;color:var(--muted);border-color:var(--line);}
+  button.danger{background:#fff;color:var(--danger);border-color:var(--danger);}
+  button:disabled{opacity:.4;cursor:not-allowed;}
+  button:hover:not(:disabled){opacity:.85;}
+  input, select{font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);}
+
+  .login-screen{max-width:360px;margin:80px auto;text-align:center;}
+  .login-screen h1{font-size:20px;margin-bottom:6px;}
+  .login-screen p{color:var(--muted);font-size:13px;margin-bottom:26px;}
+  .login-form{display:flex;flex-direction:column;gap:10px;text-align:left;}
+  .login-form label{font-size:12px;color:var(--muted);font-weight:600;}
+  .login-error{color:var(--danger);font-size:13px;margin-top:10px;min-height:18px;}
+
+  .nav-tabs{display:flex;gap:6px;margin-bottom:18px;}
+  .nav-tab{padding:8px 16px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;}
+  .nav-tab.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+
+  .toolbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:10px;}
+  .year-tabs{display:flex;gap:6px;}
+  .year-tab{padding:7px 16px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink);font-size:13px;font-weight:600;cursor:pointer;}
+  .year-tab.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .year-tab.locked{color:var(--muted);}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;}
+  .legend-item{display:flex;align-items:center;gap:6px;font-size:12.5px;}
+  .quota-badge{font-size:11px;color:var(--muted);background:var(--panel);border-radius:999px;padding:1px 8px;}
+  .state-key{display:flex;gap:16px;font-size:11.5px;color:var(--muted);margin-bottom:16px;flex-wrap:wrap;}
+  .state-key span{display:inline-flex;align-items:center;gap:6px;}
+  .key-swatch{width:14px;height:14px;border-radius:50%;display:inline-block;}
+
+  .lock-banner{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;font-size:13px;color:#6b6b6b;margin-bottom:16px;}
+  .admin-bar{display:flex;align-items:center;gap:10px;background:#fbf6ec;border:1px solid #ecdfc0;border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px;flex-wrap:wrap;}
+  .admin-bar b{font-weight:700;}
+  .admin-bar .field{display:flex;align-items:center;gap:6px;}
+
+  .msg-banner{border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px;display:none;}
+  .msg-banner.error{background:#fbeae5;color:var(--danger);display:block;}
+  .msg-banner.info{background:#eef4f0;color:#2f6b46;display:block;}
+
+  .action-bar{display:none;align-items:center;justify-content:space-between;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;margin-bottom:18px;font-size:13px;position:sticky;top:10px;z-index:5;}
+  .action-bar.show{display:flex;}
+
+  .months{display:grid;grid-template-columns:repeat(4,1fr);gap:34px 24px;}
+  @media (max-width:920px){.months{grid-template-columns:repeat(2,1fr);}}
+  @media (max-width:560px){.months{grid-template-columns:1fr;}}
+  .month h2{font-size:13px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line);}
+  .dow-row, .day-row{display:grid;grid-template-columns:repeat(7,1fr);}
+  .dow-row span{text-align:center;font-size:10.5px;color:var(--muted);font-weight:600;padding-bottom:6px;}
+  .day-cell{display:flex;align-items:center;justify-content:center;padding:2px 0;}
+  .day-num{width:27px;height:27px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11.5px;border:1.3px solid var(--circle-border);color:var(--ink);cursor:pointer;user-select:none;transition:transform .08s;background:#fff;}
+  .day-num.blank{border:none;visibility:hidden;}
+  .day-num.past{color:#c7c7c7;border-color:#ededed;cursor:default;}
+  .day-num.approved{color:#fff;border-color:transparent;}
+  .day-num.pendingstate{background:var(--pending-grey);color:#fff;border-color:transparent;}
+  .day-num.selecting{background:var(--select-blue);color:#fff;border-color:var(--select-blue);}
+  .day-num.mine{box-shadow:0 0 0 2px #fff inset;}
+  .day-num.locked{color:#d8d8d8;border-color:#f0f0f0;cursor:not-allowed;}
+  .day-num:not(.past):not(.locked):hover{transform:scale(1.12);}
+
+  /* ---------- Approvals page ---------- */
+  .req-table{width:100%;border-collapse:collapse;font-size:13px;}
+  .req-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);border-bottom:1px solid var(--line);padding:8px 10px;}
+  .req-table td{border-bottom:1px solid var(--line);padding:10px;vertical-align:top;}
+  .req-table tr:last-child td{border-bottom:none;}
+  .details-cell{font-size:12px;color:#444;line-height:1.6;}
+  .details-cell b{color:var(--ink);}
+  .empty-state{color:var(--muted);font-size:13px;padding:30px 0;text-align:center;}
+  .req-actions{display:flex;gap:8px;}
+
+  .change-pin-panel{display:none;position:absolute;right:20px;top:64px;background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.08);padding:16px;width:260px;z-index:20;}
+  .change-pin-panel.show{display:block;}
+  .change-pin-panel label{font-size:12px;color:var(--muted);font-weight:600;display:block;margin-top:8px;}
+  .change-pin-panel input{width:100%;margin-top:4px;}
+  .change-pin-panel .row{display:flex;gap:8px;margin-top:14px;}
+  .change-pin-error{color:var(--danger);font-size:12px;margin-top:8px;min-height:16px;}
+  .change-pin-ok{color:var(--ok);font-size:12px;margin-top:8px;min-height:16px;}
+
+  footer.note{margin-top:40px;font-size:11.5px;color:var(--muted);line-height:1.6;}
+</style>
+</head>
+<body>
+
+<div id="loginScreen" class="login-screen">
+  <h1>Shared House</h1>
+  <p>Enter your name and PIN to see and manage bookings.</p>
+  <form class="login-form" id="loginForm">
+    <label for="nameSelect">Name</label>
+    <select id="nameSelect" required></select>
+    <label for="pinInput">PIN</label>
+    <input id="pinInput" type="password" inputmode="numeric" maxlength="8" required>
+    <button type="submit">Log in</button>
+    <div class="login-error" id="loginError"></div>
+  </form>
+</div>
+
+<div class="wrap" id="app" style="display:none;">
+  <header class="app-header">
+    <div class="title">
+      <h1 id="pageTitle">Shared House — Booking Calendar</h1>
+      <p>Select weeks, then submit for approval. Nothing is confirmed until the admin approves it.</p>
+    </div>
+    <div class="auth-box">
+      <span class="who"><span class="dot" id="whoDot"></span><span id="whoName"></span></span>
+      <button class="ghost" id="changePinBtn">Change PIN</button>
+      <button class="ghost" id="logoutBtn">Log out</button>
+    </div>
+  </header>
+
+  <div class="change-pin-panel" id="changePinPanel">
+    <label for="curPinInput">Current PIN</label>
+    <input id="curPinInput" type="password" inputmode="numeric" maxlength="8">
+    <label for="newPinInput">New PIN</label>
+    <input id="newPinInput" type="password" inputmode="numeric" maxlength="8">
+    <label for="newPinConfirm">Confirm new PIN</label>
+    <input id="newPinConfirm" type="password" inputmode="numeric" maxlength="8">
+    <div class="change-pin-error" id="changePinError"></div>
+    <div class="change-pin-ok" id="changePinOk"></div>
+    <div class="row">
+      <button class="secondary" id="changePinCancel" style="flex:1;">Cancel</button>
+      <button id="changePinSave" style="flex:1;">Save</button>
+    </div>
+  </div>
+
+  <div class="nav-tabs" id="navTabs" style="display:none;">
+    <button class="nav-tab active" id="navCalendar">Calendar</button>
+    <button class="nav-tab" id="navApprovals">Approvals</button>
+  </div>
+
+  <div class="admin-bar" id="adminBar" style="display:none;">
+    <div class="field"><b>House:</b> <select id="houseSelect"></select></div>
+    <div class="field"><b>Acting as:</b> <select id="actingAsSelect"></select></div>
+    <span style="color:#8a7a4a;">— on this page you book/cancel directly, no approval needed.</span>
+  </div>
+
+  <div class="msg-banner" id="msgBanner"></div>
+
+  <!-- ============ CALENDAR VIEW ============ -->
+  <div id="calendarView">
+    <div class="toolbar">
+      <div class="year-tabs" id="yearTabs"></div>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div class="state-key">
+      <span><span class="key-swatch" style="background:var(--select-blue)"></span>Selecting (not yet submitted)</span>
+      <span><span class="key-swatch" style="background:var(--pending-grey)"></span>Submitted, awaiting approval</span>
+      <span><span class="key-swatch" style="background:#999"></span>Approved (own color per investor)</span>
+    </div>
+
+    <div class="lock-banner" id="lockBanner" style="display:none;"></div>
+
+    <div class="action-bar" id="actionBar">
+      <span id="actionText">0 weeks selected</span>
+      <span>
+        <button class="secondary" id="clearSelectionBtn">Clear</button>
+        <button id="confirmBookBtn">Submit for approval</button>
+      </span>
+    </div>
+
+    <div class="months" id="months"></div>
+  </div>
+
+  <!-- ============ APPROVALS VIEW (admin only) ============ -->
+  <div id="approvalsView" style="display:none;">
+    <table class="req-table">
+      <thead>
+        <tr><th>House</th><th>Investor</th><th>Year</th><th>Weeks requested</th><th>Details</th><th>Submitted</th><th></th></tr>
+      </thead>
+      <tbody id="approvalsBody"></tbody>
+    </table>
+    <div class="empty-state" id="approvalsEmpty" style="display:none;">No pending requests right now.</div>
+  </div>
+
+  <footer class="note">
+    Weeks run Monday–Sunday. A week belongs to whichever month contains its Thursday.
+    Summer weeks (June–September) need at least one block of 2 consecutive weeks if booking any summer weeks at all.
+    Gaps are measured against approved bookings only, in whole days between stays.
+  </footer>
+</div>
+
+<script>
+/* ============ CONFIG — edit this line ============ */
+const CONFIG = { API_URL: "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE" };
+/* ==================================================== */
+
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DOW_LABELS = ["M","T","W","T","F","S","S"];
+
+let state = {
+  me:null, houses:[], currentHouseId:null, actingAs:null,
+  users:[], bookings:[], serverNow:null, selectedYear:null,
+  pendingSelection:new Set(), view:'calendar',
+};
+
+function isoWeek(date){const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));const dn=d.getUTCDay()||7;d.setUTCDate(d.getUTCDate()+4-dn);const ys=new Date(Date.UTC(d.getUTCFullYear(),0,1));return Math.ceil((((d-ys)/86400000)+1)/7);}
+function isoWeekYear(date){const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));const dn=d.getUTCDay()||7;d.setUTCDate(d.getUTCDate()+4-dn);return d.getUTCFullYear();}
+function mondayOfISOWeek(year,week){const simple=new Date(Date.UTC(year,0,1+(week-1)*7));const dow=simple.getUTCDay();const monday=new Date(simple);if(dow<=4)monday.setUTCDate(simple.getUTCDate()-dow+1);else monday.setUTCDate(simple.getUTCDate()+8-dow);return monday;}
+
+async function apiGet(action, extra){
+  let url = CONFIG.API_URL + '?action=' + action + (extra||'');
+  const res = await fetch(url);
+  return res.json();
+}
+async function apiPost(payload){
+  const res = await fetch(CONFIG.API_URL, {
+    method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload),
+  });
+  return res.json();
+}
+function session(){ return JSON.parse(localStorage.getItem('shb_session')||'{}'); }
+
+async function boot(){
+  const roster = await apiGet('roster');
+  const sel = document.getElementById('nameSelect');
+  sel.innerHTML='';
+  (roster||[]).forEach(u=>{ const o=document.createElement('option'); o.value=u.name; o.textContent=u.name; sel.appendChild(o); });
+}
+boot();
+
+document.getElementById('loginForm').addEventListener('submit', async (ev)=>{
+  ev.preventDefault();
+  const name = document.getElementById('nameSelect').value;
+  const pin = document.getElementById('pinInput').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent='';
+  const res = await apiPost({action:'login', name, pin});
+  if (!res.ok){ errEl.textContent = res.error || 'Login failed.'; return; }
+  localStorage.setItem('shb_session', JSON.stringify({name, pin}));
+  await afterLogin(res);
+});
+
+async function afterLogin(res){
+  state.me = res.user;
+  state.houses = res.houses || [];
+  state.currentHouseId = state.me.isAdmin ? (state.houses[0] && state.houses[0].id) : state.me.houseId;
+  state.actingAs = state.me.isAdmin ? null : state.me.name;
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('navTabs').style.display = state.me.isAdmin ? 'flex' : 'none';
+  await loadData();
+  renderAll();
+}
+
+document.getElementById('logoutBtn').addEventListener('click', ()=>{
+  localStorage.removeItem('shb_session'); location.reload();
+});
+
+// ---------- Change PIN ----------
+const changePinPanel = document.getElementById('changePinPanel');
+document.getElementById('changePinBtn').addEventListener('click', ()=>{
+  changePinPanel.classList.toggle('show');
+  document.getElementById('curPinInput').value='';
+  document.getElementById('newPinInput').value='';
+  document.getElementById('newPinConfirm').value='';
+  document.getElementById('changePinError').textContent='';
+  document.getElementById('changePinOk').textContent='';
+});
+document.getElementById('changePinCancel').addEventListener('click', ()=>{
+  changePinPanel.classList.remove('show');
+});
+document.getElementById('changePinSave').addEventListener('click', async ()=>{
+  const curPin = document.getElementById('curPinInput').value;
+  const newPin = document.getElementById('newPinInput').value;
+  const confirmPin = document.getElementById('newPinConfirm').value;
+  const errEl = document.getElementById('changePinError');
+  const okEl = document.getElementById('changePinOk');
+  errEl.textContent=''; okEl.textContent='';
+
+  if (!curPin || !newPin || !confirmPin){ errEl.textContent='Fill in all three fields.'; return; }
+  if (newPin !== confirmPin){ errEl.textContent='New PIN and confirmation don\'t match.'; return; }
+  if (newPin.length < 4){ errEl.textContent='PIN should be at least 4 characters.'; return; }
+
+  const res = await apiPost({ action:'changePin', name: state.me.name, pin: curPin, newPin });
+  if (!res.ok){ errEl.textContent = res.error || 'Could not update PIN.'; return; }
+
+  localStorage.setItem('shb_session', JSON.stringify({ name: state.me.name, pin: newPin }));
+  okEl.textContent = 'PIN updated.';
+  setTimeout(()=>changePinPanel.classList.remove('show'), 1200);
+});
+
+async function tryResume(){
+  const s = session();
+  if (!s.name) return;
+  const res = await apiPost({action:'login', name:s.name, pin:s.pin});
+  if (res.ok) await afterLogin(res);
+}
+
+async function loadData(){
+  const data = await apiGet('data', '&house='+encodeURIComponent(state.currentHouseId||''));
+  state.users = data.users || [];
+  state.bookings = data.bookings || [];
+  state.serverNow = data.serverNow ? new Date(data.serverNow) : new Date();
+  if (!state.selectedYear) state.selectedYear = isoWeekYear(state.serverNow);
+}
+
+// ---------- Nav ----------
+document.getElementById('navCalendar').addEventListener('click', ()=>switchView('calendar'));
+document.getElementById('navApprovals').addEventListener('click', ()=>switchView('approvals'));
+function switchView(v){
+  state.view = v;
+  document.getElementById('navCalendar').classList.toggle('active', v==='calendar');
+  document.getElementById('navApprovals').classList.toggle('active', v==='approvals');
+  document.getElementById('calendarView').style.display = v==='calendar' ? 'block':'none';
+  document.getElementById('approvalsView').style.display = v==='approvals' ? 'block':'none';
+  document.getElementById('adminBar').style.display = (v==='calendar' && state.me.isAdmin) ? 'flex':'none';
+  if (v==='approvals') loadApprovals();
+}
+
+// ---------- Rendering: shared ----------
+function userByName(name){ return state.users.find(u=>u.name===name); }
+
+function renderAll(){
+  renderWho(); renderAdminBar(); renderYearTabs(); renderLegend(); renderLockBanner(); renderMonths(); renderActionBar();
+}
+function renderWho(){
+  document.getElementById('whoName').textContent = state.me.name + (state.me.isAdmin ? ' (admin)' : '');
+  document.getElementById('whoDot').style.background = state.me.isAdmin ? '#6b6b6b' : state.me.color;
+}
+function renderAdminBar(){
+  const bar = document.getElementById('adminBar');
+  if (!state.me.isAdmin){ bar.style.display='none'; return; }
+  bar.style.display = state.view==='calendar' ? 'flex' : 'none';
+
+  const hs = document.getElementById('houseSelect');
+  hs.innerHTML='';
+  state.houses.forEach(h=>{ const o=document.createElement('option'); o.value=h.id; o.textContent=h.name; if(h.id===state.currentHouseId)o.selected=true; hs.appendChild(o); });
+  hs.onchange = async ()=>{ state.currentHouseId=hs.value; state.actingAs=null; state.pendingSelection.clear(); await loadData(); renderAll(); };
+
+  const sel = document.getElementById('actingAsSelect');
+  sel.innerHTML='';
+  state.users.forEach(u=>{ const o=document.createElement('option'); o.value=u.name; o.textContent=u.name; if(u.name===state.actingAs)o.selected=true; sel.appendChild(o); });
+  if (!state.actingAs && state.users.length){ state.actingAs = state.users[0].name; sel.value=state.actingAs; }
+  sel.onchange = ()=>{ state.actingAs=sel.value; state.pendingSelection.clear(); renderAll(); };
+}
+function renderYearTabs(){
+  const wrap = document.getElementById('yearTabs'); wrap.innerHTML='';
+  const curYear = isoWeekYear(state.serverNow);
+  [curYear, curYear+1, curYear+2].forEach(y=>{
+    const b = document.createElement('button');
+    b.className = 'year-tab' + (y===state.selectedYear?' active':'') + (y>curYear+1?' locked':'');
+    b.textContent = y + (y>curYear+1 ? ' \uD83D\uDD12' : '');
+    b.onclick = ()=>{ state.selectedYear=y; state.pendingSelection.clear(); renderAll(); };
+    wrap.appendChild(b);
+  });
+}
+function renderLegend(){
+  const wrap = document.getElementById('legend'); wrap.innerHTML='';
+  state.users.forEach(u=>{
+    const approved = state.bookings.filter(b=>b.userName===u.name && b.year===state.selectedYear && b.status==='approved').length;
+    const pending = state.bookings.filter(b=>b.userName===u.name && b.year===state.selectedYear && b.status==='pending').length;
+    const item = document.createElement('div'); item.className='legend-item';
+    item.innerHTML = `<span class="dot" style="background:${u.color}"></span>${u.name} <span class="quota-badge">${approved}/${u.weeklyQuota}${pending?` (+${pending} pending)`:''}</span>`;
+    wrap.appendChild(item);
+  });
+}
+function renderLockBanner(){
+  const curYear = isoWeekYear(state.serverNow);
+  const banner = document.getElementById('lockBanner');
+  if (state.selectedYear > curYear+1){
+    banner.style.display='block';
+    banner.textContent = `${state.selectedYear} isn't open for booking yet — it unlocks once ${state.selectedYear-1} arrives. Read-only preview.`;
+  } else banner.style.display='none';
+}
+function weekEntry(year, week){ return state.bookings.find(b=>b.year===year && b.week===week); }
+function canInteract(){ const curYear=isoWeekYear(state.serverNow); return state.selectedYear<=curYear+1; }
+
+function renderMonths(){
+  const wrap = document.getElementById('months'); wrap.innerHTML='';
+  const year = state.selectedYear;
+  const curYear = isoWeekYear(state.serverNow);
+  const curWeek = isoWeek(state.serverNow);
+  const interactive = canInteract();
+
+  for (let m=0;m<12;m++){
+    const monthEl = document.createElement('div'); monthEl.className='month';
+    const h2 = document.createElement('h2'); h2.textContent = MONTH_NAMES[m]; monthEl.appendChild(h2);
+    const dowRow = document.createElement('div'); dowRow.className='dow-row';
+    DOW_LABELS.forEach(l=>{ const s=document.createElement('span'); s.textContent=l; dowRow.appendChild(s); });
+    monthEl.appendChild(dowRow);
+
+    const firstOfMonth = new Date(Date.UTC(year,m,1));
+    let startOffset = firstOfMonth.getUTCDay(); startOffset = startOffset===0?6:startOffset-1;
+    const daysInMonth = new Date(Date.UTC(year,m+1,0)).getUTCDate();
+    const totalCells = Math.ceil((startOffset+daysInMonth)/7)*7;
+    const grid = document.createElement('div'); grid.style.display='grid';
+
+    for (let i=0;i<totalCells;i+=7){
+      const rowEl = document.createElement('div'); rowEl.className='day-row';
+      for (let j=0;j<7;j++){
+        const cellIndex=i+j, dayNum=cellIndex-startOffset+1;
+        const cellWrap = document.createElement('div'); cellWrap.className='day-cell';
+        if (dayNum<1 || dayNum>daysInMonth){
+          const blank=document.createElement('div'); blank.className='day-num blank'; cellWrap.appendChild(blank);
+        } else {
+          const dateObj = new Date(Date.UTC(year,m,dayNum));
+          const wk = isoWeek(dateObj), wkYear = isoWeekYear(dateObj);
+          const entry = weekEntry(wkYear, wk);
+          const isPast = (wkYear<curYear) || (wkYear===curYear && wk<curWeek);
+          const key = wkYear+'-'+wk;
+          const isSelecting = state.pendingSelection.has(key);
+
+          const num = document.createElement('div');
+          num.className='day-num'; num.textContent=dayNum;
+          num.dataset.week=wk; num.dataset.weekYear=wkYear;
+
+          if (!interactive) num.classList.add('locked');
+          else if (isPast) num.classList.add('past');
+
+          if (entry){
+            if (entry.status==='approved'){
+              const owner = userByName(entry.userName);
+              num.classList.add('approved');
+              num.style.background = owner ? owner.color : '#999';
+              if (entry.userName===state.actingAs) num.classList.add('mine');
+              num.title = entry.userName + ' — approved';
+            } else if (entry.status==='pending'){
+              num.classList.add('pendingstate');
+              num.title = entry.userName + ' — pending approval';
+              if (entry.userName===state.actingAs) num.classList.add('mine');
+            }
+          } else if (isSelecting){
+            num.classList.add('selecting');
+            num.title = 'Selected — not yet submitted';
+          }
+
+          if (interactive && !isPast) num.addEventListener('click', ()=>onDayClick(wkYear, wk));
+          cellWrap.appendChild(num);
+        }
+        rowEl.appendChild(cellWrap);
+      }
+      grid.appendChild(rowEl);
+    }
+    monthEl.appendChild(grid);
+    wrap.appendChild(monthEl);
+  }
+}
+
+function onDayClick(wkYear, wk){
+  if (wkYear !== state.selectedYear) return;
+  const entry = weekEntry(wkYear, wk);
+  const key = wkYear+'-'+wk;
+
+  if (entry){
+    if (entry.userName !== state.actingAs){
+      if (!state.me.isAdmin){
+        showMsg('error', `Week ${wk}, ${wkYear} is ${entry.status==='pending'?'pending approval for':'already booked by'} ${entry.userName}.`);
+        return;
+      }
+      if (!confirm(`Week ${wk}, ${wkYear} is ${entry.status} for ${entry.userName}. Reassign it to ${state.actingAs}?`)) return;
+      doBook([wk], true);
+      return;
+    }
+    // Own entry.
+    if (state.me.isAdmin){
+      if (confirm(`${entry.status==='pending'?'Cancel':'Remove'} ${entry.userName}'s ${entry.status} week ${wk}, ${wkYear}?`)) doCancel(wk);
+      return;
+    }
+    if (entry.status==='pending'){
+      if (confirm(`Withdraw your pending request for week ${wk}, ${wkYear}?`)) doCancel(wk);
+    } else {
+      if (confirm(`Cancel your approved booking for week ${wk}, ${wkYear}?`)) doCancel(wk);
+    }
+    return;
+  }
+
+  if (state.pendingSelection.has(key)) state.pendingSelection.delete(key);
+  else state.pendingSelection.add(key);
+  renderMonths(); renderActionBar();
+}
+
+function renderActionBar(){
+  const bar = document.getElementById('actionBar');
+  const n = state.pendingSelection.size;
+  bar.classList.toggle('show', n>0);
+  document.getElementById('actionText').textContent = n + (n===1?' week selected':' weeks selected');
+}
+document.getElementById('clearSelectionBtn').addEventListener('click', ()=>{ state.pendingSelection.clear(); renderMonths(); renderActionBar(); });
+document.getElementById('confirmBookBtn').addEventListener('click', ()=>{
+  const weeks = Array.from(state.pendingSelection).map(k=>Number(k.split('-')[1]));
+  doBook(weeks, false);
+});
+
+async function doBook(weeks, force){
+  const s = session();
+  const res = await apiPost({
+    action:'requestBooking', name:s.name||state.me.name, pin:s.pin,
+    actingAs:state.actingAs, houseId:state.currentHouseId, year:state.selectedYear, weeks, force,
+  });
+  if (!res.ok){ showMsg('error', res.error || 'Could not submit.'); return; }
+  showMsg('info', res.status==='pending' ? 'Request submitted — awaiting admin approval.' : 'Booking saved.');
+  state.pendingSelection.clear();
+  await loadData(); renderAll();
+}
+async function doCancel(week){
+  const s = session();
+  const res = await apiPost({
+    action:'cancel', name:s.name, pin:s.pin, actingAs:state.actingAs,
+    houseId:state.currentHouseId, year:state.selectedYear, week,
+  });
+  if (!res.ok){ showMsg('error', res.error || 'Could not cancel.'); return; }
+  showMsg('info', 'Done.');
+  await loadData(); renderAll();
+}
+
+// ---------- Approvals page ----------
+async function loadApprovals(){
+  const s = session();
+  const res = await apiPost({action:'getPendingRequests', name:s.name, pin:s.pin});
+  const body = document.getElementById('approvalsBody');
+  const empty = document.getElementById('approvalsEmpty');
+  body.innerHTML='';
+  if (!res.ok){ showMsg('error', res.error||'Could not load requests.'); return; }
+  if (!res.requests.length){ empty.style.display='block'; return; }
+  empty.style.display='none';
+
+  res.requests.forEach(r=>{
+    const tr = document.createElement('tr');
+    const weekList = r.weeks.map(w=>'W'+w).join(', ');
+    const gapBefore = r.gapBeforeDays===null ? '—' : r.gapBeforeDays+' day'+(r.gapBeforeDays===1?'':'s');
+    const gapAfter = r.gapAfterDays===null ? '—' : r.gapAfterDays+' day'+(r.gapAfterDays===1?'':'s');
+    tr.innerHTML = `
+      <td>${r.houseName}</td>
+      <td>${r.userName}</td>
+      <td>${r.year}</td>
+      <td>${weekList}</td>
+      <td class="details-cell">
+        <b>${r.weeksLeftBefore}/${r.quota}</b> weeks left before this request \u2192 <b>${r.weeksLeftAfter}</b> left if approved<br>
+        Gap before: <b>${gapBefore}</b> \u00b7 Gap after: <b>${gapAfter}</b>
+      </td>
+      <td>${new Date(r.submittedAt).toLocaleDateString()}</td>
+      <td class="req-actions">
+        <button data-ids='${JSON.stringify(r.ids)}' class="approveBtn">Approve</button>
+        <button data-ids='${JSON.stringify(r.ids)}' class="danger rejectBtn">Reject</button>
+      </td>`;
+    body.appendChild(tr);
+  });
+
+  body.querySelectorAll('.approveBtn').forEach(b=>b.addEventListener('click', ()=>decide(JSON.parse(b.dataset.ids),'approved')));
+  body.querySelectorAll('.rejectBtn').forEach(b=>b.addEventListener('click', ()=>decide(JSON.parse(b.dataset.ids),'rejected')));
+}
+
+async function decide(ids, decision){
+  const s = session();
+  const res = await apiPost({action:'decideRequest', name:s.name, pin:s.pin, ids, decision});
+  if (!res.ok){ showMsg('error', res.error||'Could not update.'); return; }
+  showMsg('info', decision==='approved' ? 'Approved.' : 'Rejected.');
+  await loadApprovals();
+}
+
+function showMsg(type, text){
+  const el = document.getElementById('msgBanner');
+  el.className='msg-banner '+type; el.textContent=text;
+  clearTimeout(showMsg._t);
+  showMsg._t = setTimeout(()=>{ el.className='msg-banner'; el.textContent=''; }, 5000);
+}
+
+tryResume();
+</script>
+</body>
+</html>

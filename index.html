@@ -6,8 +6,8 @@
 <title>Shared House — Booking Calendar</title>
 <style>
   :root{
-    --bg:#ffffff; --ink:#1a1a1a; --muted:#9a9a9a; --line:#e5e5e5;
-    --circle-border:#d5d5d5; --panel:#fafafa; --danger:#b6482f; --ok:#2f6b46;
+    --bg:#f4eee1; --ink:#1a1a1a; --muted:#9a9a9a; --line:#e5e5e5;
+    --circle-border:#d5d5d5; --panel:#faf5ea; --danger:#b6482f; --ok:#2f6b46;
     --select-blue:#2F6FE0; --pending-grey:#c9c9c9; --radius:10px;
   }
   *{box-sizing:border-box;}
@@ -107,8 +107,8 @@
   <h1>Shared House</h1>
   <p>Enter your name and PIN to see and manage bookings.</p>
   <form class="login-form" id="loginForm">
-    <label for="nameSelect">Name</label>
-    <select id="nameSelect" required></select>
+    <label for="nameInput">Name</label>
+    <input id="nameInput" type="text" autocomplete="off" placeholder="Your name" required>
     <label for="pinInput">PIN</label>
     <input id="pinInput" type="password" inputmode="numeric" maxlength="8" required>
     <button type="submit">Log in</button>
@@ -202,7 +202,7 @@
 
 <script>
 /* ============ CONFIG — edit this line ============ */
-const CONFIG = { API_URL: "https://script.google.com/macros/s/AKfycbw9ByBSMASh3iaZOI4-RZyXpWByNI9vQcXCcEVLSSzz69qwZxgt65o8y7eO5XhlYlyzfA/exec" };
+const CONFIG = { API_URL: "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE" };
 /* ==================================================== */
 
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -231,17 +231,9 @@ async function apiPost(payload){
 }
 function session(){ return JSON.parse(localStorage.getItem('shb_session')||'{}'); }
 
-async function boot(){
-  const roster = await apiGet('roster');
-  const sel = document.getElementById('nameSelect');
-  sel.innerHTML='';
-  (roster||[]).forEach(u=>{ const o=document.createElement('option'); o.value=u.name; o.textContent=u.name; sel.appendChild(o); });
-}
-boot();
-
 document.getElementById('loginForm').addEventListener('submit', async (ev)=>{
   ev.preventDefault();
-  const name = document.getElementById('nameSelect').value;
+  const name = document.getElementById('nameInput').value.trim();
   const pin = document.getElementById('pinInput').value;
   const errEl = document.getElementById('loginError');
   errEl.textContent='';

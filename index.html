@@ -280,16 +280,29 @@ function todayISO(){ return formatISODate(state.serverNow); }
 function curYear(){ return state.serverNow.getUTCFullYear(); }
 function sumNights(list){ return list.reduce((sum,b)=>sum+nightsOf(b),0); }
 
+// Apps Script's Web App occasionally serves a malformed redirect response
+// instead of JSON (a Google-side hiccup, not something this app controls) —
+// without this, that throws an unhandled rejection that leaves the UI
+// stuck (e.g. on the loading screen) with no explanation. One silent retry
+// clears almost all of these; if it still fails, callers get a normal
+// {ok:false, error} they already know how to show.
+async function fetchJson_(url, options){
+  for (let attempt = 0; attempt < 2; attempt++){
+    try {
+      const res = await fetch(url, options);
+      return await res.json();
+    } catch (e) {
+      if (attempt === 1) return { ok:false, error:'Could not reach the server — please try again.' };
+    }
+  }
+}
 async function apiGet(action, extra){
-  let url = CONFIG.API_URL + '?action=' + action + (extra||'');
-  const res = await fetch(url);
-  return res.json();
+  return fetchJson_(CONFIG.API_URL + '?action=' + action + (extra||''));
 }
 async function apiPost(payload){
-  const res = await fetch(CONFIG.API_URL, {
+  return fetchJson_(CONFIG.API_URL, {
     method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload),
   });
-  return res.json();
 }
 function session(){ return JSON.parse(localStorage.getItem('shb_session')||'{}'); }
 function apiPostAdmin(extra){ const s=session(); return apiPost(Object.assign({name:s.name, pin:s.pin}, extra)); }
@@ -333,11 +346,14 @@ document.getElementById('loginForm').addEventListener('submit', async (ev)=>{
   const errEl = document.getElementById('loginError');
   errEl.textContent='';
   showLoading('Logging in…');
-  const res = await apiPost({action:'login', name, pin});
-  if (!res.ok){ hideLoading(); errEl.textContent = res.error || 'Login failed.'; return; }
-  localStorage.setItem('shb_session', JSON.stringify({name, pin}));
-  await afterLogin(res);
-  hideLoading();
+  try {
+    const res = await apiPost({action:'login', name, pin});
+    if (!res.ok){ errEl.textContent = res.error || 'Login failed.'; return; }
+    localStorage.setItem('shb_session', JSON.stringify({name, pin}));
+    await afterLogin(res);
+  } finally {
+    hideLoading();
+  }
 });
 
 async function afterLogin(res){
@@ -392,10 +408,13 @@ document.getElementById('changePinSave').addEventListener('click', async ()=>{
 async function tryResume(){
   const s = session();
   if (!s.name){ hideLoading(); return; }
-  const res = await apiPost({action:'login', name:s.name, pin:s.pin});
-  if (res.ok){ await afterLogin(res); }
-  else { localStorage.removeItem('shb_session'); }
-  hideLoading();
+  try {
+    const res = await apiPost({action:'login', name:s.name, pin:s.pin});
+    if (res.ok){ await afterLogin(res); }
+    else { localStorage.removeItem('shb_session'); }
+  } finally {
+    hideLoading();
+  }
 }
 
 async function loadData(){

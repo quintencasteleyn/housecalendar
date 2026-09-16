@@ -1,15 +1,20 @@
-# Shared House Booking Calendar — Setup (v2)
+# Shared House Booking Calendar — Setup (v3)
 
 Same architecture as before: `index.html` on GitHub Pages, `Code.gs` on
-Google Apps Script, one Google Sheet as the database. This version adds
-a request/approval workflow, an admin approvals page, and support for
-more than one house later.
+Google Apps Script, one Google Sheet as the database. This version
+switches from fixed Monday–Sunday weeks to flexible-length stays (7+
+nights, any start day), replaces the old "2 consecutive summer weeks"
+rule with a 3-week advance-notice requirement for investor requests,
+hides other investors' identities behind a generic "booked" color, and
+adds an in-app **Admin** tab for managing houses/investors/PINs.
 
-**If you already set up v1:** you need to replace the Apps Script code
-and re-deploy a new version (not just save) — see step 4. Your existing
-Sheet needs the two new tabs/columns described in step 2 if you want to
-keep old data; simplest is to just re-run `setupSheet()` on a fresh
-Sheet if you don't have real bookings yet.
+**If you already set up v1 or v2 with real data:** run `migrateToV3()`
+once from the Apps Script editor (function dropdown, top of file) —
+converts `Users.WeeklyQuota` to `Users.QuotaNights` (×7) and
+`Bookings.Year`/`Week` rows into `StartDate`/`EndDate` ranges. Safe to
+run even on an empty/fresh sheet (it's a no-op if already migrated). If
+you have no real bookings yet, it's just as easy to re-run `setupSheet()`
+on a fresh Sheet instead.
 
 ## 1. Create the Google Sheet + backend
 
@@ -46,8 +51,9 @@ Open the Sheet:
   defaults are `#B65A2E` `#4F7A5B` `#C99A3B` `#7B4B8A`, chosen to stay
   visually distinct from the blue (selecting) and grey (pending) states
   the app uses for booking status). Your own row: leave `HouseID` blank,
-  `IsAdmin` = `TRUE`, `WeeklyQuota` doesn't matter (admin doesn't book
-  for themself).
+  `IsAdmin` = `TRUE`, `QuotaNights` doesn't matter (admin doesn't book
+  for themself). You can also do all of this from the app's **Admin**
+  tab once it's deployed, instead of editing the Sheet directly.
 - **Bookings tab**: leave empty — the app fills this in.
 
 ## 3. Deploy as a Web App
@@ -73,32 +79,37 @@ version** instead, so the same URL keeps working.
 
 ## 5. How it works now
 
-- **Investors**: select weeks (they turn **blue**), then **Submit for
-  approval**. The weeks turn **light grey** for everyone — reserved,
-  not yet confirmed. Nothing becomes a real booking until you approve it.
-- **You (admin)**: two tabs at the top — **Calendar** and **Approvals**.
+- **Investors**: click a start day to select a stay — it defaults to 7
+  nights (shown **blue**), and can be extended a night at a time (click
+  further out, or use the +/− stepper) before hitting **Submit for
+  approval**. The stay turns **light grey** for everyone — reserved, not
+  yet confirmed. Nothing becomes a real booking until you approve it.
+  Requests need at least 3 weeks' notice from today.
+  Investors only ever see *their own* stays in their own color — every
+  other investor's stay (pending or approved) shows as one generic
+  "booked, not available" grey, with no name attached.
+- **You (admin)**: three tabs at the top — **Calendar**, **Approvals**,
+  **Admin**.
   - *Calendar*: pick a house from the dropdown, optionally "act as" any
-    investor, and book/cancel directly — this bypasses approval
-    entirely (it's your call as admin).
-  - *Approvals*: every pending request across **all houses**, one line
-    per investor's current pending batch, showing the house, the weeks
-    requested, how many weeks they have left before and after this
-    request, and the gap in days to the nearest approved booking before
-    and after it. Approve or reject with one click.
-- Rejected requests free the weeks back up immediately; approved ones
-  turn into that investor's own color on the calendar.
+    investor, and book/cancel directly on any notice — this bypasses
+    both the approval queue and the 3-week rule (it's your call as
+    admin). You still see every investor's stays in their own color.
+  - *Approvals*: every pending request across **all houses**, one row
+    per request, showing the house, investor, stay dates/nights, how
+    many nights they have left before and after this request, and the
+    gap in days to the nearest approved stay before and after it.
+    Approve or reject with one click.
+  - *Admin*: add, edit, or delete houses and investors; reset anyone's
+    PIN; change quotas — all without opening the Google Sheet. The
+    Sheet is still the real database underneath.
+- Rejected requests free the dates back up immediately; approved ones
+  turn into that investor's own color on the calendar (to you — other
+  investors still just see "booked").
 - **Changing PIN**: everyone (investors and you) has a "Change PIN"
   button next to "Log out" — asks for current PIN plus the new one
-  twice, updates it themselves, no Sheet editing needed. If someone
-  forgets their PIN entirely, you can still just overwrite it directly
-  in the Users tab — that always works as a fallback since it's your Sheet.
-
-**One simplification worth knowing:** if an investor has two separate
-pending submissions for the same house and year (submitted at different
-times), they show up as one combined line on the Approvals page rather
-than two — you approve/reject their whole current pending batch
-together. Ask if you'd rather review each submission separately; it's a
-bigger change to the approval-page logic.
+  twice, updates it themselves, no Sheet editing needed. As admin, you
+  can also reset anyone's PIN directly from the **Admin** tab, or as a
+  last resort overwrite it directly in the Users tab.
 
 ## 6. Adding a second house later
 
@@ -112,12 +123,16 @@ No code changes needed:
 
 ## 7. Test it
 
-- Log in as an investor, select 2 consecutive summer weeks, submit —
-  should turn grey immediately.
+- Log in as an investor, pick a start day at least 3 weeks out, submit
+  the default 7-night stay — should turn grey immediately.
 - Log in as admin, go to **Approvals** — you should see that request
-  with weeks-left and gap numbers filled in. Approve it — back on the
+  with nights-left and gap numbers filled in. Approve it — back on the
   Calendar it should now show in that investor's color.
-- Try rejecting a request — the weeks should become selectable again.
+- Try rejecting a request — the dates should become selectable again.
+- Log back in as an investor and confirm every *other* investor's stay
+  shows as one generic "booked" grey, not their own color.
 - Try the **House** dropdown (admin only) if you've added a second
   house — the calendar should switch to that house's investors and
   bookings.
+- Try the **Admin** tab: add a test investor, reset their PIN, then
+  delete them again.

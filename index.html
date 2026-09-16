@@ -288,11 +288,15 @@ function sumNights(list){ return list.reduce((sum,b)=>sum+nightsOf(b),0); }
 // {ok:false, error} they already know how to show.
 async function fetchJson_(url, options){
   for (let attempt = 0; attempt < 2; attempt++){
+    const controller = new AbortController();
+    const timeout = setTimeout(()=>controller.abort(), 15000);
     try {
-      const res = await fetch(url, options);
+      const res = await fetch(url, Object.assign({signal: controller.signal}, options));
       return await res.json();
     } catch (e) {
-      if (attempt === 1) return { ok:false, error:'Could not reach the server — please try again.' };
+      if (attempt === 1) return { ok:false, error:'The server is taking too long to respond — please try again.' };
+    } finally {
+      clearTimeout(timeout);
     }
   }
 }

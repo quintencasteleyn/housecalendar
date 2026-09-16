@@ -120,7 +120,7 @@ function migrateToV3() {
       const monday = mondayOfISOWeek_legacy_(Number(r[2]), Number(r[3]));
       const sunday = new Date(monday);
       sunday.setUTCDate(monday.getUTCDate() + 6);
-      bookings.appendRow([r[0], r[1], formatISODate_(monday), formatISODate_(sunday), r[4], r[5], r[6], r[7], r[8]]);
+      bookings.appendRow([r[0], r[1], textCell_(formatISODate_(monday)), textCell_(formatISODate_(sunday)), r[4], r[5], r[6], r[7], r[8]]);
     });
     Logger.log(`Bookings: converted ${oldRows.length} week-based row(s) to date ranges.`);
   } else {
@@ -203,6 +203,14 @@ function daysBetweenISO_(a, b) { // b - a, in whole days
 }
 function nightsOf_(b) { return daysBetweenISO_(b.startDate, b.endDate) + 1; }
 function rangesOverlap_(aStart, aEnd, bStart, bEnd) { return aStart <= bEnd && bStart <= aEnd; }
+// A leading apostrophe forces Sheets to store the value as literal text,
+// even on a Plain-Text-formatted column — setNumberFormat('@') alone is
+// NOT enough to stop appendRow()/setValues() from auto-converting an
+// unambiguous 'YYYY-MM-DD' string into a real Date. Without this, dates
+// silently become Date objects and every string comparison in this file
+// (and in index.html) breaks. getValues() strips the apostrophe back off
+// on read, so callers never see it.
+function textCell_(s) { return "'" + s; }
 
 // ---------- Data access ----------
 function readHouses_() {
@@ -380,7 +388,7 @@ function requestBooking(body) {
     const id = Utilities.getUuid();
     const now = new Date();
     const status = directApprove ? 'approved' : 'pending';
-    sh.appendRow([id, houseId, startDate, endDate, target.name, status, '', now, directApprove ? now : '']);
+    sh.appendRow([id, houseId, textCell_(startDate), textCell_(endDate), target.name, status, '', now, directApprove ? now : '']);
 
     return { ok: true, status, id };
   } finally {

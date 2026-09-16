@@ -245,6 +245,13 @@
       <label class="chk"><input id="newUserIsAdmin" type="checkbox"> Admin</label>
       <button id="addUserBtn">Add investor</button>
     </div>
+
+    <h3>All bookings (every house, every year, every status)</h3>
+    <table class="req-table">
+      <thead><tr><th>House</th><th>Investor</th><th>Stay</th><th>Status</th><th>Submitted</th><th>Decided</th></tr></thead>
+      <tbody id="allBookingsBody"></tbody>
+    </table>
+    <div class="empty-state" id="allBookingsEmpty" style="display:none;">No bookings recorded yet.</div>
   </div>
 
   <footer class="note">
@@ -265,7 +272,7 @@ const MIN_ADVANCE_DAYS = 21;
 let state = {
   me:null, houses:[], currentHouseId:null, actingAs:null,
   users:[], bookings:[], serverNow:null, selectedYear:null,
-  selection:null, view:'calendar', adminHouses:[], adminUsers:[],
+  selection:null, view:'calendar', adminHouses:[], adminUsers:[], allBookings:[],
 };
 
 // ---------- Date helpers (dates are always plain 'YYYY-MM-DD' strings) ----------
@@ -433,6 +440,7 @@ async function loadData(){
 document.getElementById('navCalendar').addEventListener('click', ()=>switchView('calendar'));
 document.getElementById('navApprovals').addEventListener('click', ()=>switchView('approvals'));
 document.getElementById('navAdmin').addEventListener('click', ()=>switchView('admin'));
+let approvalsRefreshTimer = null;
 function switchView(v){
   state.view = v;
   document.getElementById('navCalendar').classList.toggle('active', v==='calendar');
@@ -442,7 +450,15 @@ function switchView(v){
   document.getElementById('approvalsView').style.display = v==='approvals' ? 'block':'none';
   document.getElementById('adminView').style.display = v==='admin' ? 'block':'none';
   document.getElementById('adminBar').style.display = (v==='calendar' && state.me.isAdmin) ? 'flex':'none';
-  if (v==='approvals') loadApprovals();
+
+  clearInterval(approvalsRefreshTimer);
+  if (v==='approvals'){
+    loadApprovals();
+    // New requests can arrive at any time while this tab is open — a manual
+    // switch-away-and-back was the only way to see them otherwise, which is
+    // exactly the bug that got reported.
+    approvalsRefreshTimer = setInterval(loadApprovals, 20000);
+  }
   if (v==='admin') loadAdminData();
 }
 
@@ -774,9 +790,13 @@ async function decide(id, decision){
 
 // ---------- Admin data page ----------
 async function loadAdminData(){
-  const res = await apiPostAdmin({action:'adminListUsers'});
+  const [res, bookingsRes] = await Promise.all([
+    apiPostAdmin({action:'adminListUsers'}),
+    apiPostAdmin({action:'adminListBookings'}),
+  ]);
   if (!res.ok){ showMsg('error', res.error||'Could not load admin data.'); return; }
   state.adminHouses = res.houses; state.adminUsers = res.users;
+  state.allBookings = bookingsRes.ok ? bookingsRes.bookings : [];
   renderAdminView();
 }
 function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -842,6 +862,26 @@ function renderAdminView(){
     });
     usersBody.appendChild(tr);
   });
+
+  const allBody = document.getElementById('allBookingsBody');
+  const allEmpty = document.getElementById('allBookingsEmpty');
+  allBody.innerHTML = '';
+  if (!state.allBookings.length){
+    allEmpty.style.display = 'block';
+  } else {
+    allEmpty.style.display = 'none';
+    state.allBookings.forEach(b=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${esc(b.houseName)}</td>
+        <td>${esc(b.userName)}</td>
+        <td>${b.startDate} → ${b.endDate}<br><span style="color:var(--muted)">${b.nights} nights</span></td>
+        <td>${esc(b.status)}</td>
+        <td>${b.createdAt ? new Date(b.createdAt).toLocaleDateString() : '—'}</td>
+        <td>${b.decidedAt ? new Date(b.decidedAt).toLocaleDateString() : '—'}</td>`;
+      allBody.appendChild(tr);
+    });
+  }
 }
 
 document.getElementById('newUserIsAdmin').addEventListener('change', (e)=>{

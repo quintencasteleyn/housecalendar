@@ -166,6 +166,7 @@ function doPost(e) {
     if (action === 'getPendingRequests') return jsonOut(getPendingRequests(body));
     if (action === 'decideRequest') return jsonOut(decideRequest(body));
     if (action === 'adminListUsers') return jsonOut(adminListUsers(body));
+    if (action === 'adminListBookings') return jsonOut(adminListBookings(body));
     if (action === 'adminAddHouse') return jsonOut(adminAddHouse(body));
     if (action === 'adminUpdateHouse') return jsonOut(adminUpdateHouse(body));
     if (action === 'adminDeleteHouse') return jsonOut(adminDeleteHouse(body));
@@ -546,6 +547,24 @@ function adminListUsers(body) {
     });
   });
   return { ok: true, houses: readHouses_(), users, statsYear: year };
+}
+
+// Every booking, every house, every year, every status — the admin-tab
+// equivalent of just opening the Bookings sheet tab directly.
+function adminListBookings(body) {
+  const requester = authenticate_(body.name, body.pin);
+  if (!requester.isAdmin) return { ok: false, error: 'Admin only.' };
+  const houses = readHouses_();
+  const houseName_ = id => (houses.find(h => h.id === id) || {}).name || id;
+  const bookings = readBookings_()
+    .map(b => ({
+      id: b.id, houseName: houseName_(b.houseId), userName: b.userName,
+      startDate: b.startDate, endDate: b.endDate, nights: nightsOf_(b),
+      status: b.status, adminNote: b.adminNote,
+      createdAt: b.createdAt, decidedAt: b.decidedAt,
+    }))
+    .sort((a, b) => a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0);
+  return { ok: true, bookings };
 }
 
 function adminAddHouse(body) {

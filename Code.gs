@@ -285,8 +285,13 @@ function login(name, pin) {
   return out;
 }
 
+// Matches login()'s name comparison exactly (trimmed, case-insensitive) —
+// they used to differ, which meant a session started with any casing other
+// than the Sheet's exact casing would log in fine but then fail every
+// subsequent action ("Invalid login") since nothing else re-checks this.
 function authenticate_(name, pin) {
-  const user = readUsers_().find(u => u.name === name && u.pin === String(pin));
+  const target = String(name || '').trim().toLowerCase();
+  const user = readUsers_().find(u => u.name.trim().toLowerCase() === target && u.pin === String(pin));
   if (!user) throw new Error('Invalid login.');
   return user;
 }
@@ -531,7 +536,16 @@ function removeRowsByIds_(sh, ids) {
 function adminListUsers(body) {
   const requester = authenticate_(body.name, body.pin);
   if (!requester.isAdmin) return { ok: false, error: 'Admin only.' };
-  return { ok: true, houses: readHouses_(), users: readUsers_() };
+  const year = new Date().getUTCFullYear();
+  const bookings = readBookings_().filter(b => b.status !== 'rejected' && parseISODate_(b.startDate).getUTCFullYear() === year);
+  const users = readUsers_().map(u => {
+    const mine = bookings.filter(b => b.userName === u.name);
+    return Object.assign({}, u, {
+      approvedNightsThisYear: mine.filter(b => b.status === 'approved').reduce((s, b) => s + nightsOf_(b), 0),
+      pendingNightsThisYear: mine.filter(b => b.status === 'pending').reduce((s, b) => s + nightsOf_(b), 0),
+    });
+  });
+  return { ok: true, houses: readHouses_(), users, statsYear: year };
 }
 
 function adminAddHouse(body) {

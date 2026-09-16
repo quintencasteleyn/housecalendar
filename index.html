@@ -81,7 +81,14 @@
   .day-num.selecting.start{box-shadow:0 0 0 2px #fff inset;}
   .day-num.mine{box-shadow:0 0 0 2px #fff inset;}
   .day-num.locked{color:#d8d8d8;border-color:#f0f0f0;cursor:not-allowed;}
+  .day-num.soon{color:#b98a4a;border-color:#e9d3ae;}
   .day-num:not(.past):not(.locked):hover{transform:scale(1.12);}
+
+  .loading-overlay{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:1000;opacity:1;transition:opacity .3s;}
+  .loading-overlay.hide{opacity:0;pointer-events:none;}
+  .loading-text{font-size:13px;color:var(--muted);}
+  .loading-bar-track{width:220px;height:6px;background:var(--line);border-radius:999px;overflow:hidden;}
+  .loading-bar-fill{height:100%;width:0%;background:var(--ink);border-radius:999px;transition:width .2s ease-out;}
 
   /* ---------- Approvals / Admin tables ---------- */
   .req-table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px;}
@@ -113,6 +120,11 @@
 </style>
 </head>
 <body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-text" id="loadingText">Loading…</div>
+  <div class="loading-bar-track"><div class="loading-bar-fill" id="loadingBarFill"></div></div>
+</div>
 
 <div id="loginScreen" class="login-screen">
   <h1>Shared House</h1>
@@ -221,7 +233,7 @@
 
     <h3>Investors &amp; admins</h3>
     <table class="req-table">
-      <thead><tr><th>Name</th><th>House</th><th>Color</th><th>Admin?</th><th>Quota (nights)</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>House</th><th>Color</th><th>Admin?</th><th>Quota (nights)</th><th>Booked this year</th><th></th></tr></thead>
       <tbody id="usersBody"></tbody>
     </table>
     <div class="admin-add-row">
@@ -282,16 +294,50 @@ async function apiPost(payload){
 function session(){ return JSON.parse(localStorage.getItem('shb_session')||'{}'); }
 function apiPostAdmin(extra){ const s=session(); return apiPost(Object.assign({name:s.name, pin:s.pin}, extra)); }
 
+// ---------- Loading overlay ----------
+// Apps Script's cold start can take a few seconds; without this the page
+// just looks stuck. The bar's percentage is a simulated "trickle" toward
+// 90%, not a real byte-level measurement (there isn't one to measure for a
+// small JSON call) — it jumps to 100% and fades out once the real request
+// actually finishes.
+let loadingTimer = null;
+function showLoading(text){
+  clearInterval(loadingTimer);
+  const overlay = document.getElementById('loadingOverlay');
+  const fill = document.getElementById('loadingBarFill');
+  document.getElementById('loadingText').textContent = text || 'Loading…';
+  fill.style.width = '0%';
+  overlay.style.display = 'flex';
+  overlay.classList.remove('hide');
+  let pct = 0;
+  loadingTimer = setInterval(()=>{
+    pct += (90 - pct) * 0.15 + 0.5;
+    if (pct > 90) pct = 90;
+    fill.style.width = pct + '%';
+  }, 200);
+}
+function hideLoading(){
+  clearInterval(loadingTimer);
+  const overlay = document.getElementById('loadingOverlay');
+  document.getElementById('loadingBarFill').style.width = '100%';
+  setTimeout(()=>{
+    overlay.classList.add('hide');
+    setTimeout(()=>{ overlay.style.display='none'; }, 300);
+  }, 200);
+}
+
 document.getElementById('loginForm').addEventListener('submit', async (ev)=>{
   ev.preventDefault();
   const name = document.getElementById('nameInput').value.trim();
   const pin = document.getElementById('pinInput').value;
   const errEl = document.getElementById('loginError');
   errEl.textContent='';
+  showLoading('Logging in…');
   const res = await apiPost({action:'login', name, pin});
-  if (!res.ok){ errEl.textContent = res.error || 'Login failed.'; return; }
+  if (!res.ok){ hideLoading(); errEl.textContent = res.error || 'Login failed.'; return; }
   localStorage.setItem('shb_session', JSON.stringify({name, pin}));
   await afterLogin(res);
+  hideLoading();
 });
 
 async function afterLogin(res){
@@ -345,9 +391,11 @@ document.getElementById('changePinSave').addEventListener('click', async ()=>{
 
 async function tryResume(){
   const s = session();
-  if (!s.name) return;
+  if (!s.name){ hideLoading(); return; }
   const res = await apiPost({action:'login', name:s.name, pin:s.pin});
-  if (res.ok) await afterLogin(res);
+  if (res.ok){ await afterLogin(res); }
+  else { localStorage.removeItem('shb_session'); }
+  hideLoading();
 }
 
 async function loadData(){
@@ -502,7 +550,7 @@ function renderMonths(){
 
           if (!interactive) num.classList.add('locked');
           else if (isPast) num.classList.add('past');
-          else if (tooSoon){ num.classList.add('locked'); num.title = "Needs at least 3 weeks' notice"; }
+          else if (tooSoon){ num.classList.add('soon'); num.title = "Within 3 weeks — click for details"; }
 
           if (entry){
             const mine = entry.userName===state.actingAs;
@@ -529,7 +577,7 @@ function renderMonths(){
             else num.title='Selected — not yet submitted';
           }
 
-          if (interactive && !isPast && !tooSoon) num.addEventListener('click', ()=>onDayClick(iso));
+          if (interactive && !isPast) num.addEventListener('click', ()=>onDayClick(iso));
           cellWrap.appendChild(num);
         }
         rowEl.appendChild(cellWrap);
@@ -565,6 +613,12 @@ function onDayClick(iso){
     } else {
       if (confirm(`Cancel your approved stay (${entry.startDate} to ${entry.endDate})?`)) doCancel(entry.id);
     }
+    return;
+  }
+
+  const minStart = minBookableStart();
+  if (minStart && iso < minStart){
+    showMsg('error', 'Please check with our organisation whether you can still book tonight.');
     return;
   }
 
@@ -736,6 +790,7 @@ function renderAdminView(){
       <td><input type="color" class="userColorInput" value="${esc(u.color)}"></td>
       <td><input type="checkbox" class="userAdminCheckbox" ${u.isAdmin?'checked':''}></td>
       <td><input type="number" class="userQuotaInput" value="${u.quotaNights}" style="width:80px;" ${u.isAdmin?'disabled':''}></td>
+      <td>${u.isAdmin ? '—' : `${u.approvedNightsThisYear}/${u.quotaNights}${u.pendingNightsThisYear ? ` (+${u.pendingNightsThisYear} pending)` : ''}`}</td>
       <td class="req-actions">
         <button class="saveUserBtn secondary">Save</button>
         <button class="resetPinBtn secondary">Reset PIN</button>
@@ -804,6 +859,7 @@ function showMsg(type, text){
   showMsg._t = setTimeout(()=>{ el.className='msg-banner'; el.textContent=''; }, 5000);
 }
 
+showLoading('Loading your calendar…');
 tryResume();
 </script>
 </body>

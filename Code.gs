@@ -30,6 +30,7 @@ const USERS_SHEET = 'Users';
 const BOOKINGS_SHEET = 'Bookings';
 const MIN_NIGHTS = 7;
 const MIN_ADVANCE_DAYS = 21; // investors must request at least 3 weeks ahead
+const HOST_EMAIL = 'quinten.casteleynq@gmail.com';
 
 // Leave this blank if you opened this script via Extensions > Apps Script
 // from INSIDE the Google Sheet — that's the normal case and it just works.
@@ -66,12 +67,12 @@ function setupSheet() {
   let users = ss.getSheetByName(USERS_SHEET);
   if (!users) users = ss.insertSheet(USERS_SHEET);
   users.clear();
-  users.appendRow(['HouseID', 'Name', 'PIN', 'Color', 'IsAdmin', 'QuotaNights']);
-  users.appendRow(['house1', 'Investor A', '544148', '#B65A2E', 'FALSE', 28]);
-  users.appendRow(['house1', 'Investor B', '403239', '#4F7A5B', 'FALSE', 28]);
-  users.appendRow(['house1', 'Investor C', '305002', '#C99A3B', 'FALSE', 28]);
-  users.appendRow(['house1', 'Investor D', '605965', '#7B4B8A', 'FALSE', 28]);
-  users.appendRow(['', 'Quinten', '157758', '#6B6B6B', 'TRUE', 0]);
+  users.appendRow(['HouseID', 'Name', 'PIN', 'Color', 'IsAdmin', 'QuotaNights', 'Email']);
+  users.appendRow(['house1', 'Investor A', '544148', '#B65A2E', 'FALSE', 28, '']);
+  users.appendRow(['house1', 'Investor B', '403239', '#4F7A5B', 'FALSE', 28, '']);
+  users.appendRow(['house1', 'Investor C', '305002', '#C99A3B', 'FALSE', 28, '']);
+  users.appendRow(['house1', 'Investor D', '605965', '#7B4B8A', 'FALSE', 28, '']);
+  users.appendRow(['', 'Quinten', '157758', '#6B6B6B', 'TRUE', 0, '']);
   users.setFrozenRows(1);
 
   let bookings = ss.getSheetByName(BOOKINGS_SHEET);
@@ -132,6 +133,23 @@ function migrateToV3() {
   Logger.log('Migration to v3 complete.');
 }
 
+// ---------- One-time v3 -> v4 migration (adds Email to Users) ----------
+// Run this ONCE from the editor after pushing v4. Existing investors get a
+// blank Email until you fill one in via the Admin tab — login by name still
+// works as a fallback in the meantime, so nobody is locked out.
+function migrateToV4() {
+  const users = getSS_().getSheetByName(USERS_SHEET);
+  const header = users.getRange(1, 1, 1, 7).getValues()[0];
+  if (header[6] !== 'Email') {
+    users.getRange(1, 7).setValue('Email');
+    Logger.log('Users: added Email column (blank for existing rows — fill in via the Admin tab).');
+  } else {
+    Logger.log('Users already has an Email column — nothing to do.');
+  }
+  SpreadsheetApp.flush();
+  Logger.log('Migration to v4 complete.');
+}
+
 // Only used by migrateToV3() to translate old Year/Week rows.
 function mondayOfISOWeek_legacy_(year, week) {
   const simple = new Date(Date.UTC(year, 0, 1 + (week - 1) * 7));
@@ -159,8 +177,10 @@ function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
     const action = body.action;
-    if (action === 'login') return jsonOut(login(body.name, body.pin));
+    if (action === 'login') return jsonOut(login(body.identifier, body.pin));
     if (action === 'changePin') return jsonOut(changePin(body));
+    if (action === 'requestPinReset') return jsonOut(requestPinReset(body));
+    if (action === 'contactHost') return jsonOut(contactHost(body));
     if (action === 'requestBooking') return jsonOut(requestBooking(body));
     if (action === 'cancel') return jsonOut(cancelBooking(body));
     if (action === 'getPendingRequests') return jsonOut(getPendingRequests(body));
@@ -234,6 +254,7 @@ function readUsers_() {
       color: String(r[3]),
       isAdmin: String(r[4]).toUpperCase() === 'TRUE',
       quotaNights: Number(r[5]) || 0,
+      email: String(r[6] || ''),
     }));
 }
 
@@ -271,15 +292,20 @@ function getData(houseId) {
 }
 
 // ---------- Auth ----------
-function login(name, pin) {
-  const target = String(name || '').trim().toLowerCase();
-  const user = readUsers_().find(u => u.name.trim().toLowerCase() === target && u.pin === String(pin));
-  if (!user) return { ok: false, error: 'Name or PIN not recognised.' };
+// identifier can be an email (the intended way to log in going forward) or
+// a name (kept working as a fallback for any investor who doesn't have an
+// email on file yet, so switching to email-login can't lock anyone out).
+function login(identifier, pin) {
+  const target = String(identifier || '').trim().toLowerCase();
+  const users = readUsers_();
+  let user = users.find(u => u.email && u.email.trim().toLowerCase() === target && u.pin === String(pin));
+  if (!user) user = users.find(u => u.name.trim().toLowerCase() === target && u.pin === String(pin));
+  if (!user) return { ok: false, error: 'Email/name or PIN not recognised.' };
   const out = {
     ok: true,
     user: {
       name: user.name, color: user.color, isAdmin: user.isAdmin,
-      quotaNights: user.quotaNights, houseId: user.houseId,
+      quotaNights: user.quotaNights, houseId: user.houseId, email: user.email,
     },
   };
   if (user.isAdmin) out.houses = readHouses_();
@@ -320,6 +346,59 @@ function changePin(body) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// ---------- Forgot-PIN self-service ----------
+// Always returns { ok:true } regardless of whether the email was found, so
+// this can't be used to check which emails are registered.
+function requestPinReset(body) {
+  const email = String(body.email || '').trim().toLowerCase();
+  if (!email) return { ok: true };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = getSS_().getSheetByName(USERS_SHEET);
+    const rows = sh.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      const rowEmail = String(rows[i][6] || '').trim().toLowerCase();
+      if (rowEmail && rowEmail === email) {
+        const newPin = String(Math.floor(100000 + Math.random() * 900000));
+        sh.getRange(i + 1, 3).setValue(newPin);
+        const name = String(rows[i][1]);
+        MailApp.sendEmail({
+          to: String(rows[i][6]),
+          subject: 'Your new Shared House PIN',
+          body: `Hi ${name},\n\n` +
+            `A new PIN was requested for your Shared House Booking Calendar account.\n\n` +
+            `Your new PIN is: ${newPin}\n\n` +
+            `You can log in with it right away. We'd recommend changing it to something ` +
+            `you'll remember via "Change PIN" once you're in.\n\n` +
+            `If you didn't request this, someone may have entered your email by mistake — ` +
+            `you can just ignore this, or let ${HOST_EMAIL} know.\n`,
+        });
+        break;
+      }
+    }
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ---------- Contact the host ----------
+function contactHost(body) {
+  const requester = authenticate_(body.name, body.pin);
+  const message = String(body.message || '').trim();
+  if (!message) return { ok: false, error: 'Message cannot be empty.' };
+  const options = {
+    to: HOST_EMAIL,
+    subject: `[Shared House] Message from ${requester.name}`,
+    body: `${message}\n\n— sent via the Shared House Booking Calendar by ${requester.name}` +
+      (requester.email ? ` (${requester.email})` : ''),
+  };
+  if (requester.email) options.replyTo = requester.email;
+  MailApp.sendEmail(options);
+  return { ok: true };
 }
 
 // ---------- Booking / request logic ----------
@@ -628,16 +707,20 @@ function adminAddUser(body) {
   const houseId = isAdmin ? '' : String(body.houseId || '');
   const color = String(body.color || '#6b6b6b');
   const quotaNights = isAdmin ? 0 : Math.max(0, Math.round(Number(body.quotaNights) || 0));
+  const email = String(body.email || '').trim();
   if (!name) return { ok: false, error: 'Name is required.' };
   if (!pin || pin.length < 4) return { ok: false, error: 'PIN should be at least 4 characters.' };
   if (!isAdmin && !houseId) return { ok: false, error: 'House is required for a non-admin investor.' };
   if (readUsers_().some(u => u.name.trim().toLowerCase() === name.toLowerCase())) {
     return { ok: false, error: 'Someone with that name already exists.' };
   }
+  if (email && readUsers_().some(u => u.email && u.email.trim().toLowerCase() === email.toLowerCase())) {
+    return { ok: false, error: 'Someone with that email already exists.' };
+  }
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    getSS_().getSheetByName(USERS_SHEET).appendRow([houseId, name, pin, color, isAdmin ? 'TRUE' : 'FALSE', quotaNights]);
+    getSS_().getSheetByName(USERS_SHEET).appendRow([houseId, name, pin, color, isAdmin ? 'TRUE' : 'FALSE', quotaNights, email]);
     return { ok: true };
   } finally { lock.releaseLock(); }
 }
@@ -662,6 +745,7 @@ function adminUpdateUser(body) {
         }
         if (body.color !== undefined) sh.getRange(i + 1, 4).setValue(String(body.color));
         if (body.quotaNights !== undefined) sh.getRange(i + 1, 6).setValue(Math.max(0, Math.round(Number(body.quotaNights) || 0)));
+        if (body.email !== undefined) sh.getRange(i + 1, 7).setValue(String(body.email).trim());
         return { ok: true };
       }
     }

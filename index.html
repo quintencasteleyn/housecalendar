@@ -117,25 +117,51 @@
   .change-pin-ok{color:var(--ok);font-size:12px;margin-top:8px;min-height:16px;}
 
   footer.note{margin-top:40px;font-size:11.5px;color:var(--muted);line-height:1.6;}
+
+  #myDashboard{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin-bottom:22px;}
+  .dash-summary{display:flex;gap:28px;flex-wrap:wrap;}
+  .dash-stat{display:flex;flex-direction:column;}
+  .dash-stat b{font-size:22px;line-height:1.2;}
+  .dash-stat span{font-size:11.5px;color:var(--muted);}
+  .dash-booking-row{display:flex;align-items:center;gap:12px;font-size:13px;padding:7px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;}
+  .dash-booking-row:last-child{border-bottom:none;}
+  .dash-status{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:2px 8px;border-radius:999px;}
+  .dash-status.approved{background:#eef4f0;color:var(--ok);}
+  .dash-status.pending{background:#f0ede6;color:#8a7a4a;}
+  .dash-contact{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);}
+  .dash-contact textarea{width:100%;font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;resize:vertical;}
 </style>
 </head>
 <body>
 
-<div class="loading-overlay" id="loadingOverlay">
+<div class="loading-overlay" id="loadingOverlay" style="display:none;">
   <div class="loading-text" id="loadingText">Loading…</div>
   <div class="loading-bar-track"><div class="loading-bar-fill" id="loadingBarFill"></div></div>
 </div>
 
 <div id="loginScreen" class="login-screen">
   <h1>Shared House</h1>
-  <p>Enter your name and PIN to see and manage bookings.</p>
+  <p>Enter your email and PIN to see and manage bookings.</p>
   <form class="login-form" id="loginForm">
-    <label for="nameInput">Name</label>
-    <input id="nameInput" type="text" autocomplete="off" placeholder="Your name" required>
+    <label for="identifierInput">Email</label>
+    <input id="identifierInput" type="text" autocomplete="off" placeholder="you@example.com" required>
     <label for="pinInput">PIN</label>
     <input id="pinInput" type="password" inputmode="numeric" maxlength="8" required>
     <button type="submit">Log in</button>
     <div class="login-error" id="loginError"></div>
+    <a href="#" id="forgotPinLink" style="font-size:12px;color:var(--muted);text-align:center;margin-top:4px;">Forgot your PIN?</a>
+  </form>
+</div>
+
+<div id="forgotPinScreen" class="login-screen" style="display:none;">
+  <h1>Request a new PIN</h1>
+  <p>Enter your email — if it's on file, we'll send you a new PIN.</p>
+  <form class="login-form" id="forgotPinForm">
+    <label for="forgotEmailInput">Email</label>
+    <input id="forgotEmailInput" type="text" autocomplete="off" placeholder="you@example.com" required>
+    <button type="submit">Send new PIN</button>
+    <div class="login-error" id="forgotPinMsg"></div>
+    <a href="#" id="backToLoginLink" style="font-size:12px;color:var(--muted);text-align:center;margin-top:4px;">Back to login</a>
   </form>
 </div>
 
@@ -180,6 +206,21 @@
   </div>
 
   <div class="msg-banner" id="msgBanner"></div>
+
+  <!-- ============ MY BOOKINGS (investors only) ============ -->
+  <div id="myDashboard" style="display:none;">
+    <div class="dash-summary" id="myDashboardSummary"></div>
+    <h3 style="font-size:13px;margin:18px 0 8px;">Your stays</h3>
+    <div id="myDashboardList"></div>
+    <div class="dash-contact">
+      <h3 style="font-size:13px;margin:0 0 8px;">Contact the host</h3>
+      <textarea id="contactMessage" rows="3" placeholder="Question or request for the host..."></textarea>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
+        <button id="sendContactBtn" type="button">Send</button>
+        <span id="contactStatus" style="font-size:12px;color:var(--muted);"></span>
+      </div>
+    </div>
+  </div>
 
   <!-- ============ CALENDAR VIEW ============ -->
   <div id="calendarView">
@@ -233,11 +274,12 @@
 
     <h3>Investors &amp; admins</h3>
     <table class="req-table">
-      <thead><tr><th>Name</th><th>House</th><th>Color</th><th>Admin?</th><th>Quota (nights)</th><th>Booked this year</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Email</th><th>House</th><th>Color</th><th>Admin?</th><th>Quota (nights)</th><th>Booked this year</th><th></th></tr></thead>
       <tbody id="usersBody"></tbody>
     </table>
     <div class="admin-add-row">
       <input id="newUserName" type="text" placeholder="Name">
+      <input id="newUserEmail" type="text" placeholder="Email">
       <select id="newUserHouse"></select>
       <input id="newUserColor" type="color" value="#6b6b6b">
       <input id="newUserQuota" type="number" placeholder="Quota nights" value="28">
@@ -268,9 +310,10 @@ const MONTH_NAMES = ["January","February","March","April","May","June","July","A
 const DOW_LABELS = ["M","T","W","T","F","S","S"];
 const MIN_NIGHTS = 7;
 const MIN_ADVANCE_DAYS = 21;
+const OVERVIEW_MODE = '__overview__'; // admin "acting as" value meaning "just looking, not booking for anyone"
 
 let state = {
-  me:null, houses:[], currentHouseId:null, actingAs:null,
+  me:null, session:null, houses:[], currentHouseId:null, actingAs:null,
   users:[], bookings:[], serverNow:null, selectedYear:null,
   selection:null, view:'calendar', adminHouses:[], adminUsers:[], allBookings:[],
 };
@@ -286,6 +329,10 @@ function yearOf(iso){ return Number(iso.slice(0,4)); }
 function todayISO(){ return formatISODate(state.serverNow); }
 function curYear(){ return state.serverNow.getUTCFullYear(); }
 function sumNights(list){ return list.reduce((sum,b)=>sum+nightsOf(b),0); }
+function quotaBadgeText(approved, pending, quota){
+  const total = approved + pending;
+  return `${total}/${quota} nights${pending?` (${pending} days pending)`:''}`;
+}
 
 // Apps Script's Web App occasionally serves a malformed redirect response
 // instead of JSON (a Google-side hiccup, not something this app controls) —
@@ -315,7 +362,9 @@ async function apiPost(payload){
     method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload),
   });
 }
-function session(){ return JSON.parse(localStorage.getItem('shb_session')||'{}'); }
+// Session lives only in memory, on purpose — reopening or reloading the
+// page always requires the PIN again, it's never silently remembered.
+function session(){ return state.session || {}; }
 function apiPostAdmin(extra){ const s=session(); return apiPost(Object.assign({name:s.name, pin:s.pin}, extra)); }
 
 // ---------- Loading overlay ----------
@@ -352,19 +401,48 @@ function hideLoading(){
 
 document.getElementById('loginForm').addEventListener('submit', async (ev)=>{
   ev.preventDefault();
-  const name = document.getElementById('nameInput').value.trim();
+  const identifier = document.getElementById('identifierInput').value.trim();
   const pin = document.getElementById('pinInput').value;
   const errEl = document.getElementById('loginError');
   errEl.textContent='';
   showLoading('Logging in…');
   try {
-    const res = await apiPost({action:'login', name, pin});
+    const res = await apiPost({action:'login', identifier, pin});
     if (!res.ok){ errEl.textContent = res.error || 'Login failed.'; return; }
-    localStorage.setItem('shb_session', JSON.stringify({name, pin}));
+    state.session = { name: res.user.name, pin };
     await afterLogin(res);
   } finally {
     hideLoading();
   }
+});
+
+document.getElementById('forgotPinLink').addEventListener('click', (ev)=>{
+  ev.preventDefault();
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('forgotPinScreen').style.display='block';
+  document.getElementById('forgotEmailInput').value='';
+  document.getElementById('forgotPinMsg').textContent='';
+  document.getElementById('forgotPinMsg').style.color='';
+});
+document.getElementById('backToLoginLink').addEventListener('click', (ev)=>{
+  ev.preventDefault();
+  document.getElementById('forgotPinScreen').style.display='none';
+  document.getElementById('loginScreen').style.display='block';
+});
+document.getElementById('forgotPinForm').addEventListener('submit', async (ev)=>{
+  ev.preventDefault();
+  const email = document.getElementById('forgotEmailInput').value.trim();
+  const msgEl = document.getElementById('forgotPinMsg');
+  showLoading('Sending…');
+  try {
+    await apiPost({action:'requestPinReset', email});
+  } finally {
+    hideLoading();
+  }
+  // Always the same message, whether or not the email was found — so this
+  // screen can't be used to check which emails are registered.
+  msgEl.style.color = 'var(--ok)';
+  msgEl.textContent = "If that email is on file, we've sent a new PIN to it.";
 });
 
 async function afterLogin(res){
@@ -380,7 +458,7 @@ async function afterLogin(res){
 }
 
 document.getElementById('logoutBtn').addEventListener('click', ()=>{
-  localStorage.removeItem('shb_session'); location.reload();
+  state.session = null; location.reload();
 });
 
 // ---------- Change PIN ----------
@@ -411,22 +489,10 @@ document.getElementById('changePinSave').addEventListener('click', async ()=>{
   const res = await apiPost({ action:'changePin', name: state.me.name, pin: curPin, newPin });
   if (!res.ok){ errEl.textContent = res.error || 'Could not update PIN.'; return; }
 
-  localStorage.setItem('shb_session', JSON.stringify({ name: state.me.name, pin: newPin }));
+  state.session = { name: state.me.name, pin: newPin };
   okEl.textContent = 'PIN updated.';
   setTimeout(()=>changePinPanel.classList.remove('show'), 1200);
 });
-
-async function tryResume(){
-  const s = session();
-  if (!s.name){ hideLoading(); return; }
-  try {
-    const res = await apiPost({action:'login', name:s.name, pin:s.pin});
-    if (res.ok){ await afterLogin(res); }
-    else { localStorage.removeItem('shb_session'); }
-  } finally {
-    hideLoading();
-  }
-}
 
 async function loadData(){
   const data = await apiGet('data', '&house='+encodeURIComponent(state.currentHouseId||''));
@@ -467,8 +533,52 @@ function userByName(name){ return state.users.find(u=>u.name===name); }
 function bookingForDate(iso){ return state.bookings.find(b=> iso>=b.startDate && iso<=b.endDate); }
 
 function renderAll(){
-  renderWho(); renderAdminBar(); renderYearTabs(); renderLegend(); renderStateKey(); renderLockBanner(); renderMonths(); renderActionBar();
+  renderWho(); renderAdminBar(); renderYearTabs(); renderLegend(); renderStateKey(); renderLockBanner(); renderMonths(); renderActionBar(); renderMyDashboard();
 }
+function renderMyDashboard(){
+  const wrap = document.getElementById('myDashboard');
+  if (state.me.isAdmin){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+
+  const mine = state.bookings.filter(b=>b.userName===state.me.name && yearOf(b.startDate)===state.selectedYear);
+  const approved = mine.filter(b=>b.status==='approved');
+  const pending = mine.filter(b=>b.status==='pending');
+  const approvedNights = sumNights(approved);
+  const pendingNights = sumNights(pending);
+  const remaining = state.me.quotaNights - approvedNights - pendingNights;
+
+  document.getElementById('myDashboardSummary').innerHTML = `
+    <div class="dash-stat"><b>${remaining}</b><span>nights remaining (${state.selectedYear})</span></div>
+    <div class="dash-stat"><b>${approvedNights + pendingNights}</b><span>nights booked${pendingNights?` (${pendingNights} pending)`:''}</span></div>
+  `;
+
+  const list = document.getElementById('myDashboardList');
+  const all = approved.concat(pending).sort((a,b)=> a.startDate<b.startDate?-1:1);
+  if (!all.length){
+    list.innerHTML = '<div class="empty-state" style="padding:10px 0;">No stays yet for '+state.selectedYear+'.</div>';
+  } else {
+    list.innerHTML = all.map(b=>`
+      <div class="dash-booking-row">
+        <span class="dash-status ${b.status}">${b.status==='approved'?'Approved':'Sent for approval'}</span>
+        <span>${b.startDate} → ${b.endDate}</span>
+        <span style="color:var(--muted)">${nightsOf(b)} nights</span>
+      </div>`).join('');
+  }
+}
+document.getElementById('sendContactBtn').addEventListener('click', async ()=>{
+  const message = document.getElementById('contactMessage').value.trim();
+  const statusEl = document.getElementById('contactStatus');
+  if (!message){ statusEl.style.color='var(--danger)'; statusEl.textContent='Write a message first.'; return; }
+  const s = session();
+  statusEl.style.color='var(--muted)'; statusEl.textContent='Sending…';
+  const res = await apiPost({action:'contactHost', name:s.name, pin:s.pin, message});
+  if (res.ok){
+    statusEl.style.color='var(--ok)'; statusEl.textContent='Sent!';
+    document.getElementById('contactMessage').value='';
+  } else {
+    statusEl.style.color='var(--danger)'; statusEl.textContent = res.error || 'Could not send.';
+  }
+});
 function renderWho(){
   document.getElementById('whoName').textContent = state.me.name + (state.me.isAdmin ? ' (admin)' : '');
   document.getElementById('whoDot').style.background = state.me.isAdmin ? '#6b6b6b' : state.me.color;
@@ -485,8 +595,12 @@ function renderAdminBar(){
 
   const sel = document.getElementById('actingAsSelect');
   sel.innerHTML='';
+  const overviewOpt = document.createElement('option');
+  overviewOpt.value = OVERVIEW_MODE; overviewOpt.textContent = '— Admin overview (view only) —';
+  sel.appendChild(overviewOpt);
   state.users.forEach(u=>{ const o=document.createElement('option'); o.value=u.name; o.textContent=u.name; if(u.name===state.actingAs)o.selected=true; sel.appendChild(o); });
-  if (!state.actingAs && state.users.length){ state.actingAs = state.users[0].name; sel.value=state.actingAs; }
+  if (!state.actingAs){ state.actingAs = OVERVIEW_MODE; }
+  sel.value = state.actingAs;
   sel.onchange = ()=>{ state.actingAs=sel.value; state.selection=null; renderAll(); };
 }
 function renderYearTabs(){
@@ -507,14 +621,15 @@ function renderLegend(){
       const approved = sumNights(state.bookings.filter(b=>b.userName===u.name && b.status==='approved' && yearOf(b.startDate)===state.selectedYear));
       const pending = sumNights(state.bookings.filter(b=>b.userName===u.name && b.status==='pending' && yearOf(b.startDate)===state.selectedYear));
       const item = document.createElement('div'); item.className='legend-item';
-      item.innerHTML = `<span class="dot" style="background:${u.color}"></span>${u.name} <span class="quota-badge">${approved}/${u.quotaNights} nights${pending?` (+${pending} pending)`:''}</span>`;
+      item.innerHTML = `<span class="dot" style="background:${u.color}"></span>${u.name} <span class="quota-badge">${quotaBadgeText(approved,pending,u.quotaNights)}</span>`;
       wrap.appendChild(item);
     });
   } else {
-    const approved = sumNights(state.bookings.filter(b=>b.userName===state.me.name && b.status==='approved' && yearOf(b.startDate)===state.selectedYear));
-    const pending = sumNights(state.bookings.filter(b=>b.userName===state.me.name && b.status==='pending' && yearOf(b.startDate)===state.selectedYear));
+    // Your own nights-remaining/booked numbers now live in the dashboard
+    // panel above the calendar — this just keeps the color key for reading
+    // the grid itself.
     const mine = document.createElement('div'); mine.className='legend-item';
-    mine.innerHTML = `<span class="dot" style="background:${state.me.color}"></span>You <span class="quota-badge">${approved}/${state.me.quotaNights} nights${pending?` (+${pending} pending)`:''}</span>`;
+    mine.innerHTML = `<span class="dot" style="background:${state.me.color}"></span>You`;
     const others = document.createElement('div'); others.className='legend-item';
     others.innerHTML = `<span class="dot" style="background:var(--unavailable)"></span>Other investors (booked)`;
     wrap.appendChild(mine); wrap.appendChild(others);
@@ -524,10 +639,15 @@ function renderStateKey(){
   const wrap = document.getElementById('stateKey'); wrap.innerHTML='';
   const items = [
     [`var(--select-blue)`, 'Selecting (not yet submitted)'],
-    [`var(--pending-grey)`, 'Submitted, awaiting approval'],
   ];
-  if (state.me.isAdmin) items.push(['#999', 'Approved (own color per investor)']);
-  else { items.push(['#999', 'Your approved stay (your color)']); items.push(['var(--unavailable)', 'Booked by someone else']); }
+  if (state.me.isAdmin) {
+    items.push(['#999', 'Approved (own color per investor)']);
+    items.push(['#999', 'Pending (own color, faded — hover for who)']);
+  } else {
+    items.push([`var(--pending-grey)`, 'Submitted, awaiting approval']);
+    items.push(['#999', 'Your approved stay (your color)']);
+    items.push(['var(--unavailable)', 'Booked by someone else']);
+  }
   items.forEach(([color,label])=>{
     const span = document.createElement('span');
     span.innerHTML = `<span class="key-swatch" style="background:${color}"></span>${label}`;
@@ -607,8 +727,12 @@ function renderMonths(){
             } else if (entry.status==='pending'){
               num.classList.add('pendingstate');
               if (mine){ num.classList.add('mine'); num.title='Your request — pending approval'; }
-              else if (state.me.isAdmin){ num.title = entry.userName+' — pending approval'; }
-              else { num.title = 'Pending request — not yet available'; }
+              else if (state.me.isAdmin){
+                const owner=userByName(entry.userName);
+                num.style.background = owner ? owner.color : '#999';
+                num.style.opacity = '0.55';
+                num.title = entry.userName+' — pending approval';
+              } else { num.title = 'Pending request — not yet available'; }
             }
           } else if (isInSelection(iso)){
             num.classList.add('selecting');
@@ -658,6 +782,11 @@ function onDayClick(iso){
   const minStart = minBookableStart();
   if (minStart && iso < minStart){
     showMsg('error', 'Please check with our organisation whether you can still book tonight.');
+    return;
+  }
+
+  if (state.me.isAdmin && state.actingAs === OVERVIEW_MODE){
+    showMsg('error', 'Pick an investor in "Acting as" to book on their behalf — this view is just for looking.');
     return;
   }
 
@@ -829,11 +958,12 @@ function renderAdminView(){
     const houseOpts = state.adminHouses.map(h=>`<option value="${esc(h.id)}" ${h.id===u.houseId?'selected':''}>${esc(h.name)}</option>`).join('');
     tr.innerHTML = `
       <td>${esc(u.name)}</td>
+      <td><input type="text" class="userEmailInput" value="${esc(u.email||'')}" placeholder="email" style="width:100%;"></td>
       <td>${u.isAdmin ? '—' : `<select class="userHouseSelect">${houseOpts}</select>`}</td>
       <td><input type="color" class="userColorInput" value="${esc(u.color)}"></td>
       <td><input type="checkbox" class="userAdminCheckbox" ${u.isAdmin?'checked':''}></td>
       <td><input type="number" class="userQuotaInput" value="${u.quotaNights}" style="width:80px;" ${u.isAdmin?'disabled':''}></td>
-      <td>${u.isAdmin ? '—' : `${u.approvedNightsThisYear}/${u.quotaNights}${u.pendingNightsThisYear ? ` (+${u.pendingNightsThisYear} pending)` : ''}`}</td>
+      <td>${u.isAdmin ? '—' : quotaBadgeText(u.approvedNightsThisYear, u.pendingNightsThisYear, u.quotaNights)}</td>
       <td class="req-actions">
         <button class="saveUserBtn secondary">Save</button>
         <button class="resetPinBtn secondary">Reset PIN</button>
@@ -841,10 +971,11 @@ function renderAdminView(){
       </td>`;
     tr.querySelector('.saveUserBtn').addEventListener('click', async ()=>{
       const houseSel = tr.querySelector('.userHouseSelect');
+      const email = tr.querySelector('.userEmailInput').value.trim();
       const color = tr.querySelector('.userColorInput').value;
       const isAdmin = tr.querySelector('.userAdminCheckbox').checked;
       const quotaNights = Number(tr.querySelector('.userQuotaInput').value)||0;
-      const payload = { action:'adminUpdateUser', targetName:u.name, color, isAdmin, quotaNights };
+      const payload = { action:'adminUpdateUser', targetName:u.name, color, isAdmin, quotaNights, email };
       if (houseSel) payload.houseId = houseSel.value;
       const res = await apiPostAdmin(payload);
       if (res.ok){ showMsg('info','Saved.'); await loadAdminData(); await loadData(); renderAll(); } else showMsg('error', res.error);
@@ -900,15 +1031,16 @@ document.getElementById('addHouseBtn').addEventListener('click', async ()=>{
 });
 document.getElementById('addUserBtn').addEventListener('click', async ()=>{
   const userName = document.getElementById('newUserName').value.trim();
+  const email = document.getElementById('newUserEmail').value.trim();
   const houseId = document.getElementById('newUserHouse').value;
   const color = document.getElementById('newUserColor').value;
   const quotaNights = Number(document.getElementById('newUserQuota').value)||0;
   const newUserPin = document.getElementById('newUserPin').value.trim();
   const isAdmin = document.getElementById('newUserIsAdmin').checked;
-  const res = await apiPostAdmin({action:'adminAddUser', userName, houseId, color, quotaNights, newUserPin, isAdmin});
+  const res = await apiPostAdmin({action:'adminAddUser', userName, email, houseId, color, quotaNights, newUserPin, isAdmin});
   if (res.ok){
     showMsg('info','Added.');
-    document.getElementById('newUserName').value=''; document.getElementById('newUserPin').value='';
+    document.getElementById('newUserName').value=''; document.getElementById('newUserEmail').value=''; document.getElementById('newUserPin').value='';
     document.getElementById('newUserIsAdmin').checked=false;
     document.getElementById('newUserHouse').disabled=false; document.getElementById('newUserQuota').disabled=false;
     await loadAdminData();
@@ -922,8 +1054,6 @@ function showMsg(type, text){
   showMsg._t = setTimeout(()=>{ el.className='msg-banner'; el.textContent=''; }, 5000);
 }
 
-showLoading('Loading your calendar…');
-tryResume();
 </script>
 </body>
 </html>

@@ -29,7 +29,9 @@ also via the in-app Admin tab (see below).
 
 - **Houses**: `HouseID`, `HouseName`
 - **Users**: `HouseID`, `Name`, `PIN`, `Color`, `IsAdmin`, `QuotaNights`
-  (nights per year, not weeks — see v3 note below)
+  (nights per year, not weeks — see v3 note below), `Email` (v4 — login
+  is by email now, with name kept as an automatic fallback for anyone
+  without an email on file yet)
   — PINs are **plain text**, intentionally. Fine for this trust level
     (a family/co-investor group), not fine if this pattern gets reused
     for anything more sensitive.
@@ -115,6 +117,37 @@ also via the in-app Admin tab (see below).
   pencil icon → **New version**. This is the single most common source
   of "I changed it but nothing happened" confusion on this project.
 
+## v4 changes (email login, PIN recovery, contact form, richer admin/investor views)
+
+- Login is now by email + PIN (name still works automatically as a
+  fallback for anyone without an email on file — see the Users note
+  above). Sessions are **never persisted** across page loads by design:
+  closing or reopening the page always asks for the PIN again.
+- "Forgot your PIN?" on the login screen emails a fresh 6-digit PIN to
+  a registered address via `MailApp` — always responds the same way
+  whether or not the email was found, so it can't be used to check who
+  is registered.
+- Investors get a "Contact the host" box that emails `HOST_EMAIL`
+  (`quinten.casteleynq@gmail.com`, top of `Code.gs`) directly — also
+  via `MailApp`. **Both of these need the Apps Script project to be
+  authorized for sending mail** — if the live deployment throws an
+  authorization error the first time either is used, open the project
+  in the Apps Script editor once and approve the permission prompt.
+- Investor view gained a dashboard above the calendar: nights
+  remaining/booked for the selected year, a list of their own stays by
+  status, and the contact form.
+- Admin's "Acting as" picker gained an "Admin overview (view only)"
+  option — browsing without implicitly booking on a specific
+  investor's behalf. Admin's calendar now also color-codes *pending*
+  stays by investor (faded, not flat grey) so identity and status are
+  both visible at a glance.
+- Quota badges everywhere read `{approved+pending}/{quota} nights
+  ({pending} days pending)` instead of showing approved and pending as
+  separate numbers.
+- New `adminListBookings` endpoint backs an "All bookings" table in
+  the Admin tab — every booking, every house, every year, every
+  status, not just a per-investor nights-used summary.
+
 ## Deploying backend changes via clasp
 
 `Code.gs` is version-controlled and pushed via [clasp](https://github.com/google/clasp)
@@ -129,5 +162,10 @@ or the MD files). The usual two-step still applies:
 
 ## Not yet done
 
-- Nothing outstanding as of v3 (PIN resets and clasp are both done —
-  see the Admin tab and the section above).
+- Run `migrateToV4()` once (adds the `Email` column) and fill in every
+  investor's email via the Admin tab — until you do, they keep logging
+  in with their name, which still works but isn't the intended path
+  and means "Forgot your PIN" can't help them yet.
+- Verify `MailApp` sending actually works on the live deployment (see
+  the v4 section above) — it needs the project's mail-sending
+  permission to have been granted at least once.

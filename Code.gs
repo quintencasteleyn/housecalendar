@@ -133,6 +133,14 @@ function migrateToV3() {
   Logger.log('Migration to v3 complete.');
 }
 
+// ---------- One-time: authorize mail sending ----------
+// Run this once from the editor (function dropdown) and approve the
+// permission prompt — MailApp needs that one-time interactive consent
+// before requestPinReset()/contactHost() can work on the live deployment.
+function testMailAuthorization() {
+  MailApp.sendEmail(HOST_EMAIL, 'Shared House: mail test', 'If you got this, mail sending is authorized correctly.');
+}
+
 // ---------- One-time v3 -> v4 migration (adds Email to Users) ----------
 // Run this ONCE from the editor after pushing v4. Existing investors get a
 // blank Email until you fill one in via the Admin tab — login by name still

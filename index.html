@@ -931,12 +931,20 @@ async function decide(id, decision){
 
 // ---------- Admin data page ----------
 async function loadAdminData(){
-  const [res, bookingsRes] = await Promise.all([
-    apiPostAdmin({action:'adminListUsers'}),
-    apiPostAdmin({action:'adminListBookings'}),
-  ]);
-  if (!res.ok){ showMsg('error', res.error||'Could not load admin data.'); return; }
+  // Sequential on purpose, not Promise.all: Apps Script is noticeably less
+  // reliable when the same script gets hit by two concurrent requests, and
+  // this was the one place in the app that did that.
+  let res = await apiPostAdmin({action:'adminListUsers'});
+  if (!res.ok){
+    // fetchJson_ already retries transport-level failures; this covers the
+    // rarer case where Apps Script itself returns a bad result once. One
+    // extra attempt before bothering the admin with an error banner.
+    await new Promise(r=>setTimeout(r, 1200));
+    res = await apiPostAdmin({action:'adminListUsers'});
+  }
+  if (!res.ok){ showMsg('error', res.error||'Could not load admin data — try switching tabs and back.'); return; }
   state.adminHouses = res.houses; state.adminUsers = res.users;
+  const bookingsRes = await apiPostAdmin({action:'adminListBookings'});
   state.allBookings = bookingsRes.ok ? bookingsRes.bookings : [];
   renderAdminView();
 }

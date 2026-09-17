@@ -496,6 +496,18 @@ document.getElementById('changePinSave').addEventListener('click', async ()=>{
 
 async function loadData(){
   const data = await apiGet('data', '&house='+encodeURIComponent(state.currentHouseId||''));
+  // getData() never had an {ok} wrapper (unlike every POST action), so a
+  // transient fetch failure — which fetchJson_ turns into {ok:false, error}
+  // — used to fall straight through the "|| []" defaults below and wipe the
+  // whole calendar to empty instead of just failing to refresh. That's most
+  // visible right after a successful booking: the write goes through, but
+  // if the very next refresh hits the glitch, everything you just booked
+  // (and everyone else's stays) would appear to vanish — easily read as
+  // "the Book button doesn't work." Keep whatever was last loaded instead.
+  if (!data || data.error){
+    showMsg('error', (data && data.error) || 'Could not refresh — showing the last loaded data.');
+    return;
+  }
   state.users = data.users || [];
   state.bookings = data.bookings || [];
   state.serverNow = data.serverNow ? new Date(data.serverNow) : new Date();

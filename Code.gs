@@ -371,8 +371,11 @@ function requestPinReset(body) {
       const rowEmail = String(rows[i][6] || '').trim().toLowerCase();
       if (rowEmail && rowEmail === email) {
         const newPin = String(Math.floor(100000 + Math.random() * 900000));
-        sh.getRange(i + 1, 3).setValue(newPin);
         const name = String(rows[i][1]);
+        // Send BEFORE writing the new PIN — if mail sending fails (e.g. not
+        // yet authorized, or any other hiccup), the user's existing PIN
+        // must stay valid rather than silently locking them out of an
+        // account whose new PIN they were never actually told.
         MailApp.sendEmail({
           to: String(rows[i][6]),
           subject: 'Your new Shared House PIN',
@@ -384,6 +387,7 @@ function requestPinReset(body) {
             `If you didn't request this, someone may have entered your email by mistake — ` +
             `you can just ignore this, or let ${HOST_EMAIL} know.\n`,
         });
+        sh.getRange(i + 1, 3).setValue(newPin);
         break;
       }
     }

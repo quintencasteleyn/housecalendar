@@ -60,6 +60,19 @@
   .msg-banner.error{background:#fbeae5;color:var(--danger);display:block;}
   .msg-banner.info{background:#eef4f0;color:#2f6b46;display:block;}
 
+  .popup-overlay{position:fixed;inset:0;background:rgba(26,26,26,.45);display:none;align-items:center;justify-content:center;z-index:900;padding:20px;}
+  .popup-overlay.show{display:flex;}
+  .popup-box{background:#fff;border-radius:var(--radius);padding:22px 24px;max-width:420px;width:100%;position:relative;box-shadow:0 12px 32px rgba(0,0,0,.18);}
+  .popup-box.error{border-top:4px solid var(--danger);}
+  .popup-box.info{border-top:4px solid var(--ok);}
+  .popup-close{position:absolute;top:8px;right:10px;background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:2px 8px;line-height:1;}
+  .popup-close:hover{color:var(--ink);opacity:1;}
+  .popup-text{font-size:14px;line-height:1.55;padding-right:10px;white-space:pre-line;}
+  .popup-box h3{margin:0 0 14px;font-size:15px;padding-right:16px;}
+  .popup-box textarea{width:100%;font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;resize:vertical;}
+  .popup-box label.chk{display:flex;align-items:flex-start;gap:6px;font-size:12px;color:var(--muted);margin-top:10px;line-height:1.4;}
+  .popup-box .row{display:flex;gap:8px;margin-top:16px;}
+
   .action-bar{display:none;align-items:center;justify-content:space-between;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;margin-bottom:18px;font-size:13px;position:sticky;top:10px;z-index:5;flex-wrap:wrap;}
   .action-bar.show{display:flex;}
   .nights-stepper{display:flex;align-items:center;gap:6px;}
@@ -130,6 +143,14 @@
   .dash-status.pending{background:#f0ede6;color:#8a7a4a;}
   .dash-contact{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);}
   .dash-contact textarea{width:100%;font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;resize:vertical;}
+
+  #settingsView h3{font-size:14px;margin:26px 0 10px;}
+  #settingsView h3:first-of-type{margin-top:0;}
+  #settingsView textarea{width:100%;font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;resize:vertical;}
+  .settings-pin-fields{display:flex;flex-direction:column;gap:8px;max-width:280px;}
+  .faq-list p{margin:0 0 14px;}
+  .back-link{font-size:12px;color:var(--muted);cursor:pointer;display:inline-block;margin-bottom:16px;}
+  .back-link:hover{color:var(--ink);}
 </style>
 </head>
 <body>
@@ -137,6 +158,27 @@
 <div class="loading-overlay" id="loadingOverlay" style="display:none;">
   <div class="loading-text" id="loadingText">Loading…</div>
   <div class="loading-bar-track"><div class="loading-bar-fill" id="loadingBarFill"></div></div>
+</div>
+
+<div class="popup-overlay" id="popupOverlay">
+  <div class="popup-box" id="popupBox">
+    <button class="popup-close" id="popupCloseBtn" type="button">&times;</button>
+    <div class="popup-text" id="popupText"></div>
+  </div>
+</div>
+
+<div class="popup-overlay" id="rejectOverlay">
+  <div class="popup-box">
+    <button class="popup-close" id="rejectCloseBtn" type="button">&times;</button>
+    <h3>Reject this request?</h3>
+    <label style="font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px;">Note for the investor (optional)</label>
+    <textarea id="rejectNoteInput" rows="2"></textarea>
+    <label class="chk"><input type="checkbox" id="rejectSendEmailInput"> Send rejection email now (placeholder wording until you draft your own)</label>
+    <div class="row">
+      <button class="secondary" id="rejectCancelBtn" style="flex:1;" type="button">Cancel</button>
+      <button class="danger" id="rejectConfirmBtn" style="flex:1;" type="button">Reject</button>
+    </div>
+  </div>
 </div>
 
 <div id="loginScreen" class="login-screen">
@@ -173,6 +215,7 @@
     </div>
     <div class="auth-box">
       <span class="who"><span class="dot" id="whoDot"></span><span id="whoName"></span></span>
+      <button class="ghost" id="settingsBtn" style="display:none;">Settings</button>
       <button class="ghost" id="changePinBtn">Change PIN</button>
       <button class="ghost" id="logoutBtn">Log out</button>
     </div>
@@ -211,6 +254,7 @@
   <div id="myDashboard" style="display:none;">
     <div class="dash-summary" id="myDashboardSummary"></div>
     <h3 style="font-size:13px;margin:18px 0 8px;">Your stays</h3>
+    <p style="font-size:11.5px;color:var(--muted);margin:0 0 10px;">Need to change dates on a stay, not just cancel it? Cancel it below and submit a new request, or contact the host.</p>
     <div id="myDashboardList"></div>
     <div class="dash-contact">
       <h3 style="font-size:13px;margin:0 0 8px;">Contact the host</h3>
@@ -294,6 +338,46 @@
       <tbody id="allBookingsBody"></tbody>
     </table>
     <div class="empty-state" id="allBookingsEmpty" style="display:none;">No bookings recorded yet.</div>
+  </div>
+
+  <!-- ============ SETTINGS VIEW (investors only) ============ -->
+  <div id="settingsView" style="display:none;">
+    <span class="back-link" id="settingsBackLink">&larr; Back to calendar</span>
+
+    <h3>Your color</h3>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 10px;">This is the color your approved stays show up in on the calendar (to the host — other investors just see "booked").</p>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:26px;">
+      <input type="color" id="settingsColorInput">
+      <button id="saveColorBtn" type="button">Save color</button>
+      <span id="colorStatus" style="font-size:12px;"></span>
+    </div>
+
+    <h3>Change PIN</h3>
+    <div class="settings-pin-fields">
+      <input id="settingsCurPin" type="password" inputmode="numeric" maxlength="8" placeholder="Current PIN">
+      <input id="settingsNewPin" type="password" inputmode="numeric" maxlength="8" placeholder="New PIN">
+      <input id="settingsNewPinConfirm" type="password" inputmode="numeric" maxlength="8" placeholder="Confirm new PIN">
+      <button id="settingsSavePinBtn" type="button">Update PIN</button>
+      <span id="settingsPinStatus" style="font-size:12px;"></span>
+    </div>
+
+    <h3>FAQ</h3>
+    <div class="faq-list">
+      <p><b>How far ahead can I book?</b><br>Only the current year and next year are open for booking.</p>
+      <p><b>What's the shortest stay I can request?</b><br>7 nights minimum — extend a night at a time from there.</p>
+      <p><b>How much notice do I need to give?</b><br>At least 3 weeks before the start date. Inside that window, you'll need to contact the host directly.</p>
+      <p><b>What happens after I submit a request?</b><br>It shows as pending until the host approves or rejects it — you'll get a notification either way.</p>
+      <p><b>How do I cancel a stay?</b><br>Click on it in the calendar and confirm.</p>
+      <p><b>How do I change the dates on an approved stay?</b><br>Cancel it and submit a new request, or contact the host.</p>
+      <p><b>I forgot my PIN — now what?</b><br>Use "Forgot your PIN?" on the login screen.</p>
+    </div>
+
+    <h3>Request information from the host</h3>
+    <textarea id="settingsRequestInfo" rows="3" placeholder="What would you like to know?"></textarea>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
+      <button id="sendRequestInfoBtn" type="button">Send</button>
+      <span id="requestInfoStatus" style="font-size:12px;color:var(--muted);"></span>
+    </div>
   </div>
 
   <footer class="note">
@@ -453,8 +537,23 @@ async function afterLogin(res){
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('app').style.display='block';
   document.getElementById('navTabs').style.display = state.me.isAdmin ? 'flex' : 'none';
+  document.getElementById('settingsBtn').style.display = state.me.isAdmin ? 'none' : 'inline-block';
+  document.getElementById('changePinBtn').style.display = state.me.isAdmin ? 'inline-block' : 'none';
   await loadData();
   renderAll();
+  if (res.notifications && res.notifications.length) showNotifications(res.notifications.slice());
+}
+
+// One at a time — approving/rejecting several requests while someone was
+// logged out shows them one popup per decision, in order, not a pile-up.
+function showNotifications(queue){
+  if (!queue.length) return;
+  const n = queue.shift();
+  apiPost({action:'acknowledgeNotification', name: state.session.name, pin: state.session.pin, id: n.id});
+  const text = n.status==='approved'
+    ? `Your request has been approved!\n${n.startDate} → ${n.endDate}.`
+    : `Your request for ${n.startDate} → ${n.endDate} was not approved.` + (n.adminNote ? `\n\nNote: ${n.adminNote}` : '');
+  showMsg(n.status==='approved' ? 'info' : 'error', text, () => showNotifications(queue));
 }
 
 document.getElementById('logoutBtn').addEventListener('click', ()=>{
@@ -527,6 +626,8 @@ function switchView(v){
   document.getElementById('calendarView').style.display = v==='calendar' ? 'block':'none';
   document.getElementById('approvalsView').style.display = v==='approvals' ? 'block':'none';
   document.getElementById('adminView').style.display = v==='admin' ? 'block':'none';
+  document.getElementById('settingsView').style.display = v==='settings' ? 'block':'none';
+  document.getElementById('myDashboard').style.display = (v==='calendar' && !state.me.isAdmin) ? 'block':'none';
   document.getElementById('adminBar').style.display = (v==='calendar' && state.me.isAdmin) ? 'flex':'none';
 
   clearInterval(approvalsRefreshTimer);
@@ -538,7 +639,11 @@ function switchView(v){
     approvalsRefreshTimer = setInterval(loadApprovals, 20000);
   }
   if (v==='admin') loadAdminData();
+  if (v==='settings') renderSettingsView();
+  if (v==='calendar') renderAll();
 }
+document.getElementById('settingsBtn').addEventListener('click', ()=>switchView('settings'));
+document.getElementById('settingsBackLink').addEventListener('click', ()=>switchView('calendar'));
 
 // ---------- Rendering: shared ----------
 function userByName(name){ return state.users.find(u=>u.name===name); }
@@ -549,7 +654,7 @@ function renderAll(){
 }
 function renderMyDashboard(){
   const wrap = document.getElementById('myDashboard');
-  if (state.me.isAdmin){ wrap.style.display='none'; return; }
+  if (state.me.isAdmin || state.view!=='calendar'){ wrap.style.display='none'; return; }
   wrap.style.display='block';
 
   const mine = state.bookings.filter(b=>b.userName===state.me.name && yearOf(b.startDate)===state.selectedYear);
@@ -587,6 +692,59 @@ document.getElementById('sendContactBtn').addEventListener('click', async ()=>{
   if (res.ok){
     statusEl.style.color='var(--ok)'; statusEl.textContent='Sent!';
     document.getElementById('contactMessage').value='';
+  } else {
+    statusEl.style.color='var(--danger)'; statusEl.textContent = res.error || 'Could not send.';
+  }
+});
+
+// ---------- Settings view (investors only) ----------
+function renderSettingsView(){
+  document.getElementById('settingsColorInput').value = state.me.color;
+  document.getElementById('colorStatus').textContent = '';
+  document.getElementById('settingsPinStatus').textContent = '';
+  document.getElementById('requestInfoStatus').textContent = '';
+}
+document.getElementById('saveColorBtn').addEventListener('click', async ()=>{
+  const color = document.getElementById('settingsColorInput').value;
+  const statusEl = document.getElementById('colorStatus');
+  statusEl.style.color='var(--muted)'; statusEl.textContent='Saving…';
+  const s = session();
+  const res = await apiPost({action:'updateMyColor', name:s.name, pin:s.pin, color});
+  if (res.ok){
+    state.me.color = color;
+    renderWho();
+    statusEl.style.color='var(--ok)'; statusEl.textContent='Saved.';
+    await loadData(); renderAll();
+  } else {
+    statusEl.style.color='var(--danger)'; statusEl.textContent = res.error || 'Could not save.';
+  }
+});
+document.getElementById('settingsSavePinBtn').addEventListener('click', async ()=>{
+  const curPin = document.getElementById('settingsCurPin').value;
+  const newPin = document.getElementById('settingsNewPin').value;
+  const confirmPin = document.getElementById('settingsNewPinConfirm').value;
+  const statusEl = document.getElementById('settingsPinStatus');
+  if (!curPin || !newPin || !confirmPin){ statusEl.style.color='var(--danger)'; statusEl.textContent='Fill in all three fields.'; return; }
+  if (newPin !== confirmPin){ statusEl.style.color='var(--danger)'; statusEl.textContent="New PIN and confirmation don't match."; return; }
+  if (newPin.length < 4){ statusEl.style.color='var(--danger)'; statusEl.textContent='PIN should be at least 4 characters.'; return; }
+  const res = await apiPost({ action:'changePin', name: state.me.name, pin: curPin, newPin });
+  if (!res.ok){ statusEl.style.color='var(--danger)'; statusEl.textContent = res.error || 'Could not update PIN.'; return; }
+  state.session = { name: state.me.name, pin: newPin };
+  statusEl.style.color='var(--ok)'; statusEl.textContent='PIN updated.';
+  document.getElementById('settingsCurPin').value='';
+  document.getElementById('settingsNewPin').value='';
+  document.getElementById('settingsNewPinConfirm').value='';
+});
+document.getElementById('sendRequestInfoBtn').addEventListener('click', async ()=>{
+  const message = document.getElementById('settingsRequestInfo').value.trim();
+  const statusEl = document.getElementById('requestInfoStatus');
+  if (!message){ statusEl.style.color='var(--danger)'; statusEl.textContent='Write a message first.'; return; }
+  const s = session();
+  statusEl.style.color='var(--muted)'; statusEl.textContent='Sending…';
+  const res = await apiPost({action:'contactHost', name:s.name, pin:s.pin, message});
+  if (res.ok){
+    statusEl.style.color='var(--ok)'; statusEl.textContent='Sent!';
+    document.getElementById('settingsRequestInfo').value='';
   } else {
     statusEl.style.color='var(--danger)'; statusEl.textContent = res.error || 'Could not send.';
   }
@@ -918,16 +1076,43 @@ async function loadApprovals(){
   });
 
   body.querySelectorAll('.approveBtn').forEach(b=>b.addEventListener('click', ()=>decide(b.dataset.id,'approved')));
-  body.querySelectorAll('.rejectBtn').forEach(b=>b.addEventListener('click', ()=>decide(b.dataset.id,'rejected')));
+  body.querySelectorAll('.rejectBtn').forEach(b=>b.addEventListener('click', ()=>openRejectModal(b.dataset.id)));
 }
 
-async function decide(id, decision){
+async function decide(id, decision, note, sendEmail){
   const s = session();
-  const res = await apiPost({action:'decideRequest', name:s.name, pin:s.pin, id, decision});
+  const payload = {action:'decideRequest', name:s.name, pin:s.pin, id, decision};
+  if (note) payload.note = note;
+  if (sendEmail) payload.sendEmail = true;
+  const res = await apiPost(payload);
   if (!res.ok){ showMsg('error', res.error||'Could not update.'); return; }
   showMsg('info', decision==='approved' ? 'Approved.' : 'Rejected.');
   await loadApprovals();
 }
+
+// ---------- Reject modal (note + optional email) ----------
+let pendingRejectId = null;
+function openRejectModal(id){
+  pendingRejectId = id;
+  document.getElementById('rejectNoteInput').value = '';
+  document.getElementById('rejectSendEmailInput').checked = false;
+  document.getElementById('rejectOverlay').classList.add('show');
+}
+function closeRejectModal(){
+  document.getElementById('rejectOverlay').classList.remove('show');
+  pendingRejectId = null;
+}
+document.getElementById('rejectCloseBtn').addEventListener('click', closeRejectModal);
+document.getElementById('rejectCancelBtn').addEventListener('click', closeRejectModal);
+document.getElementById('rejectOverlay').addEventListener('click', (e)=>{ if (e.target.id==='rejectOverlay') closeRejectModal(); });
+document.getElementById('rejectConfirmBtn').addEventListener('click', async ()=>{
+  const id = pendingRejectId;
+  if (!id) return;
+  const note = document.getElementById('rejectNoteInput').value.trim();
+  const sendEmail = document.getElementById('rejectSendEmailInput').checked;
+  closeRejectModal();
+  await decide(id, 'rejected', note, sendEmail);
+});
 
 // ---------- Admin data page ----------
 async function loadAdminData(){
@@ -959,12 +1144,12 @@ function renderAdminView(){
     tr.querySelector('.saveHouseBtn').addEventListener('click', async ()=>{
       const name = tr.querySelector('.houseNameInput').value.trim();
       const res = await apiPostAdmin({action:'adminUpdateHouse', houseId:h.id, houseName:name});
-      if (res.ok){ showMsg('info','Saved.'); await loadAdminData(); } else showMsg('error', res.error);
+      if (res.ok){ showBanner('info','Saved.'); await loadAdminData(); } else showBanner('error', res.error);
     });
     tr.querySelector('.deleteHouseBtn').addEventListener('click', async ()=>{
       if (!confirm(`Delete "${h.name}"?`)) return;
       const res = await apiPostAdmin({action:'adminDeleteHouse', houseId:h.id});
-      if (res.ok){ showMsg('info','Deleted.'); await loadAdminData(); await loadData(); renderAll(); } else showMsg('error', res.error);
+      if (res.ok){ showBanner('info','Deleted.'); await loadAdminData(); await loadData(); renderAll(); } else showBanner('error', res.error);
     });
     housesBody.appendChild(tr);
   });
@@ -998,18 +1183,18 @@ function renderAdminView(){
       const payload = { action:'adminUpdateUser', targetName:u.name, color, isAdmin, quotaNights, email };
       if (houseSel) payload.houseId = houseSel.value;
       const res = await apiPostAdmin(payload);
-      if (res.ok){ showMsg('info','Saved.'); await loadAdminData(); await loadData(); renderAll(); } else showMsg('error', res.error);
+      if (res.ok){ showBanner('info','Saved.'); await loadAdminData(); await loadData(); renderAll(); } else showBanner('error', res.error);
     });
     tr.querySelector('.resetPinBtn').addEventListener('click', async ()=>{
       const newPin = prompt(`New PIN for ${u.name}:`);
       if (!newPin) return;
       const res = await apiPostAdmin({action:'adminResetPin', targetName:u.name, newPin});
-      if (res.ok) showMsg('info','PIN reset.'); else showMsg('error', res.error);
+      if (res.ok) showBanner('info','PIN reset.'); else showBanner('error', res.error);
     });
     tr.querySelector('.deleteUserBtn').addEventListener('click', async ()=>{
       if (!confirm(`Delete ${u.name}? Their existing bookings will remain but won't be manageable via their login.`)) return;
       const res = await apiPostAdmin({action:'adminDeleteUser', targetName:u.name});
-      if (res.ok){ showMsg('info','Deleted.'); await loadAdminData(); await loadData(); renderAll(); } else showMsg('error', res.error);
+      if (res.ok){ showBanner('info','Deleted.'); await loadAdminData(); await loadData(); renderAll(); } else showBanner('error', res.error);
     });
     usersBody.appendChild(tr);
   });
@@ -1044,10 +1229,10 @@ document.getElementById('addHouseBtn').addEventListener('click', async ()=>{
   const houseName = document.getElementById('newHouseName').value.trim();
   const res = await apiPostAdmin({action:'adminAddHouse', houseId, houseName});
   if (res.ok){
-    showMsg('info','Added.');
+    showBanner('info','Added.');
     document.getElementById('newHouseId').value=''; document.getElementById('newHouseName').value='';
     await loadAdminData();
-  } else showMsg('error', res.error);
+  } else showBanner('error', res.error);
 });
 document.getElementById('addUserBtn').addEventListener('click', async ()=>{
   const userName = document.getElementById('newUserName').value.trim();
@@ -1059,19 +1244,42 @@ document.getElementById('addUserBtn').addEventListener('click', async ()=>{
   const isAdmin = document.getElementById('newUserIsAdmin').checked;
   const res = await apiPostAdmin({action:'adminAddUser', userName, email, houseId, color, quotaNights, newUserPin, isAdmin});
   if (res.ok){
-    showMsg('info','Added.');
+    showBanner('info','Added.');
     document.getElementById('newUserName').value=''; document.getElementById('newUserEmail').value=''; document.getElementById('newUserPin').value='';
     document.getElementById('newUserIsAdmin').checked=false;
     document.getElementById('newUserHouse').disabled=false; document.getElementById('newUserQuota').disabled=false;
     await loadAdminData();
-  } else showMsg('error', res.error);
+  } else showBanner('error', res.error);
 });
 
-function showMsg(type, text){
+// Outcome popups for the calendar/booking/approvals flow — these used to be
+// an easy-to-miss inline banner that auto-cleared after 5s; reported as
+// "not visible at all". Stays open until manually closed (X, or clicking
+// outside the box). Optional onClose lets callers chain a follow-up (used
+// to show approve/reject notifications one at a time).
+let popupOnClose = null;
+function showMsg(type, text, onClose){
+  document.getElementById('popupBox').className = 'popup-box ' + type;
+  document.getElementById('popupText').textContent = text;
+  document.getElementById('popupOverlay').classList.add('show');
+  popupOnClose = onClose || null;
+}
+function closePopup(){
+  document.getElementById('popupOverlay').classList.remove('show');
+  const cb = popupOnClose; popupOnClose = null;
+  if (cb) cb();
+}
+document.getElementById('popupCloseBtn').addEventListener('click', closePopup);
+document.getElementById('popupOverlay').addEventListener('click', (e)=>{ if (e.target.id==='popupOverlay') closePopup(); });
+
+// Lightweight inline banner, kept only for frequent low-stakes admin-tab
+// CRUD feedback (Saved/Deleted/etc.) where a modal popup per click would be
+// disruptive when editing several rows in a row.
+function showBanner(type, text){
   const el = document.getElementById('msgBanner');
   el.className='msg-banner '+type; el.textContent=text;
-  clearTimeout(showMsg._t);
-  showMsg._t = setTimeout(()=>{ el.className='msg-banner'; el.textContent=''; }, 5000);
+  clearTimeout(showBanner._t);
+  showBanner._t = setTimeout(()=>{ el.className='msg-banner'; el.textContent=''; }, 5000);
 }
 
 </script>

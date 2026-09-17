@@ -78,7 +78,7 @@ function setupSheet() {
   let bookings = ss.getSheetByName(BOOKINGS_SHEET);
   if (!bookings) bookings = ss.insertSheet(BOOKINGS_SHEET);
   bookings.clear();
-  bookings.appendRow(['ID', 'HouseID', 'StartDate', 'EndDate', 'UserName', 'Status', 'AdminNote', 'CreatedAt', 'DecidedAt']);
+  bookings.appendRow(['ID', 'HouseID', 'StartDate', 'EndDate', 'UserName', 'Status', 'AdminNote', 'CreatedAt', 'DecidedAt', 'NotifiedAt']);
   bookings.getRange('C:D').setNumberFormat('@'); // dates stored as plain 'YYYY-MM-DD' text, never auto-converted
   bookings.setFrozenRows(1);
 
@@ -158,6 +158,24 @@ function migrateToV4() {
   Logger.log('Migration to v4 complete.');
 }
 
+// ---------- One-time v4 -> v5 migration (adds NotifiedAt to Bookings) ----------
+// Run this ONCE from the editor after pushing v5. Backs the "you have a new
+// decision" in-app popup on next login — existing decided bookings start
+// with a blank NotifiedAt, so anyone with an already-decided request will
+// see one notification for it the next time they log in.
+function migrateToV5() {
+  const bookings = getSS_().getSheetByName(BOOKINGS_SHEET);
+  const header = bookings.getRange(1, 1, 1, 10).getValues()[0];
+  if (header[9] !== 'NotifiedAt') {
+    bookings.getRange(1, 10).setValue('NotifiedAt');
+    Logger.log('Bookings: added NotifiedAt column.');
+  } else {
+    Logger.log('Bookings already has a NotifiedAt column — nothing to do.');
+  }
+  SpreadsheetApp.flush();
+  Logger.log('Migration to v5 complete.');
+}
+
 // Only used by migrateToV3() to translate old Year/Week rows.
 function mondayOfISOWeek_legacy_(year, week) {
   const simple = new Date(Date.UTC(year, 0, 1 + (week - 1) * 7));
@@ -187,6 +205,8 @@ function doPost(e) {
     const action = body.action;
     if (action === 'login') return jsonOut(login(body.identifier, body.pin));
     if (action === 'changePin') return jsonOut(changePin(body));
+    if (action === 'updateMyColor') return jsonOut(updateMyColor(body));
+    if (action === 'acknowledgeNotification') return jsonOut(acknowledgeNotification(body));
     if (action === 'requestPinReset') return jsonOut(requestPinReset(body));
     if (action === 'contactHost') return jsonOut(contactHost(body));
     if (action === 'requestBooking') return jsonOut(requestBooking(body));
@@ -282,6 +302,7 @@ function readBookings_() {
       adminNote: String(r[6] || ''),
       createdAt: r[7],
       decidedAt: r[8],
+      notifiedAt: r[9] || '',
     }));
 }
 
@@ -316,8 +337,59 @@ function login(identifier, pin) {
       quotaNights: user.quotaNights, houseId: user.houseId, email: user.email,
     },
   };
-  if (user.isAdmin) out.houses = readHouses_();
+  if (user.isAdmin) {
+    out.houses = readHouses_();
+  } else {
+    // Anything approved/rejected since the investor last saw it — shown as
+    // a popup on login, dismissed via acknowledgeNotification().
+    out.notifications = readBookings_()
+      .filter(b => b.userName === user.name && b.decidedAt && !b.notifiedAt &&
+        (b.status === 'approved' || b.status === 'rejected'))
+      .map(b => ({ id: b.id, status: b.status, startDate: b.startDate, endDate: b.endDate, adminNote: b.adminNote }));
+  }
   return out;
+}
+
+function acknowledgeNotification(body) {
+  const requester = authenticate_(body.name, body.pin);
+  const id = String(body.id || '');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = getSS_().getSheetByName(BOOKINGS_SHEET);
+    const rows = sh.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]) === id && String(rows[i][4]) === requester.name) {
+        sh.getRange(i + 1, 10).setValue(new Date());
+        return { ok: true };
+      }
+    }
+    return { ok: false, error: 'Not found.' };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ---------- Self-service color change ----------
+function updateMyColor(body) {
+  const requester = authenticate_(body.name, body.pin);
+  const color = String(body.color || '').trim();
+  if (!/^#[0-9a-fA-F]{6}$/.test(color)) return { ok: false, error: 'Invalid color.' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = getSS_().getSheetByName(USERS_SHEET);
+    const rows = sh.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][1]) === requester.name) {
+        sh.getRange(i + 1, 4).setValue(color);
+        return { ok: true };
+      }
+    }
+    return { ok: false, error: 'Could not find your account row.' };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // Matches login()'s name comparison exactly (trimmed, case-insensitive) —
@@ -593,6 +665,36 @@ function decideRequest(body) {
         break;
       }
     }
+
+    // Email is a bonus notification on top of the in-app popup (which is
+    // guaranteed since it doesn't depend on mail working) — never let a
+    // mail failure undo an already-saved decision.
+    try {
+      const target = readUsers_().find(u => u.name === row.userName);
+      if (decision === 'approved' && target && target.email) {
+        MailApp.sendEmail({
+          to: target.email,
+          subject: 'Your Shared House request was approved',
+          body: `Hi ${target.name},\n\nGood news — your request for ${row.startDate} to ${row.endDate} has been approved.` +
+            (body.note ? `\n\nNote from the host: ${body.note}` : '') +
+            `\n\nSee you then!\n`,
+        });
+      } else if (decision === 'rejected' && body.sendEmail && target && target.email) {
+        // PLACEHOLDER wording — the host hasn't drafted the real rejection
+        // email yet. Replace this body text once they have.
+        MailApp.sendEmail({
+          to: target.email,
+          subject: 'Update on your Shared House request',
+          body: `Hi ${target.name},\n\nYour request for ${row.startDate} to ${row.endDate} was not approved this time.` +
+            (body.note ? `\n\nNote from the host: ${body.note}` : '') +
+            `\n\nGet in touch if you have questions.\n`,
+        });
+      }
+    } catch (e) {
+      // Swallow — e.g. mail not yet authorized. The decision itself already
+      // succeeded and the in-app notification will still reach them.
+    }
+
     return { ok: true };
   } finally {
     lock.releaseLock();

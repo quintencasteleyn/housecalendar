@@ -640,7 +640,7 @@ function switchView(v){
   }
   if (v==='admin') loadAdminData();
   if (v==='settings') renderSettingsView();
-  if (v==='calendar') renderAll();
+  if (v==='calendar') loadData().then(renderAll);
 }
 document.getElementById('settingsBtn').addEventListener('click', ()=>switchView('settings'));
 document.getElementById('settingsBackLink').addEventListener('click', ()=>switchView('calendar'));
@@ -1087,6 +1087,12 @@ async function decide(id, decision, note, sendEmail){
   const res = await apiPost(payload);
   if (!res.ok){ showMsg('error', res.error||'Could not update.'); return; }
   showMsg('info', decision==='approved' ? 'Approved.' : 'Rejected.');
+  // decideRequest() changes a booking's status, but only loadApprovals()
+  // was being refreshed here — the Calendar's own state.bookings kept
+  // showing the old (pending) status until something else happened to
+  // reload it. Reported live: approved a stay, it still rendered faded/
+  // pending on the Calendar tab.
+  await loadData();
   await loadApprovals();
 }
 

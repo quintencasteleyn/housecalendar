@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shared House — Booking Calendar</title>
+<style>
+  :root{
+    --bg:#f4eee1; --ink:#1a1a1a; --muted:#9a9a9a; --line:#e5e5e5;
+    --circle-border:#d5d5d5; --panel:#faf5ea; --danger:#b6482f; --ok:#2f6b46;
+    --select-blue:#2F6FE0; --pending-grey:#c9c9c9; --unavailable:#7a7a7a; --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px;}
+
+  header.app-header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;padding-bottom:18px;border-bottom:1px solid var(--line);margin-bottom:18px;}
+  .title h1{font-size:22px;margin:0 0 4px;font-weight:700;letter-spacing:-0.01em;}
+  .title p{margin:0;color:var(--muted);font-size:13px;}
+  .auth-box{display:flex;align-items:center;gap:10px;font-size:13px;}
+  .who{display:flex;align-items:center;gap:8px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none;}
+  button{font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;border-radius:8px;padding:8px 14px;border:1px solid var(--ink);background:var(--ink);color:#fff;transition:opacity .15s;}
+  button.secondary{background:#fff;color:var(--ink);}
+  button.ghost{background:transparent;color:var(--muted);border-color:var(--line);}
+  button.danger{background:#fff;color:var(--danger);border-color:var(--danger);}
+  button:disabled{opacity:.4;cursor:not-allowed;}
+  button:hover:not(:disabled){opacity:.85;}
+  input, select{font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);}
+
+  .login-screen{max-width:360px;margin:80px auto;text-align:center;}
+  .login-screen h1{font-size:20px;margin-bottom:6px;}
+  .login-screen p{color:var(--muted);font-size:13px;margin-bottom:26px;}
+  .login-form{display:flex;flex-direction:column;gap:10px;text-align:left;}
+  .login-form label{font-size:12px;color:var(--muted);font-weight:600;}
+  .login-error{color:var(--danger);font-size:13px;margin-top:10px;min-height:18px;}
+
+  .nav-tabs{display:flex;gap:6px;margin-bottom:18px;}
+  .nav-tab{padding:8px 16px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;}
+  .nav-tab.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+
+  .toolbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:10px;}
+  .year-tabs{display:flex;gap:6px;}
+  .year-tab{padding:7px 16px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink);font-size:13px;font-weight:600;cursor:pointer;}
+  .year-tab.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .year-tab.locked{color:var(--muted);}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;}
+  .legend-item{display:flex;align-items:center;gap:6px;font-size:12.5px;}
+  .quota-badge{font-size:11px;color:var(--muted);background:var(--panel);border-radius:999px;padding:1px 8px;}
+  .state-key{display:flex;gap:16px;font-size:11.5px;color:var(--muted);margin-bottom:16px;flex-wrap:wrap;}
+  .state-key span{display:inline-flex;align-items:center;gap:6px;}
+  .key-swatch{width:14px;height:14px;border-radius:50%;display:inline-block;}
+
+  .lock-banner{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;font-size:13px;color:#6b6b6b;margin-bottom:16px;}
+  .admin-bar{display:flex;align-items:center;gap:10px;background:#fbf6ec;border:1px solid #ecdfc0;border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px;flex-wrap:wrap;}
+  .admin-bar b{font-weight:700;}
+  .admin-bar .field{display:flex;align-items:center;gap:6px;}
+
+  .msg-banner{border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px;display:none;}
+  .msg-banner.error{background:#fbeae5;color:var(--danger);display:block;}
+  .msg-banner.info{background:#eef4f0;color:#2f6b46;display:block;}
+
+  .popup-overlay{position:fixed;inset:0;background:rgba(26,26,26,.45);display:none;align-items:center;justify-content:center;z-index:900;padding:20px;}
+  .popup-overlay.show{display:flex;}
+  .popup-box{background:#fff;border-radius:var(--radius);padding:22px 24px;max-width:420px;width:100%;position:relative;box-shadow:0 12px 32px rgba(0,0,0,.18);}
+  .popup-box.error{border-top:4px solid var(--danger);}
+  .popup-box.info{border-top:4px solid var(--ok);}
+  .popup-close{position:absolute;top:8px;right:10px;background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:2px 8px;line-height:1;}
+  .popup-close:hover{color:var(--ink);opacity:1;}
+  .popup-text{font-size:14px;line-height:1.55;padding-right:10px;white-space:pre-line;}
+  .popup-box h3{margin:0 0 14px;font-size:15px;padding-right:16px;}
+  .popup-box textarea{width:100%;font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;resize:vertical;}
+  .popup-box label.chk{display:flex;align-items:flex-start;gap:6px;font-size:12px;color:var(--muted);margin-top:10px;line-height:1.4;}
+  .popup-box .row{display:flex;gap:8px;margin-top:16px;}
+
+  .action-bar{display:none;align-items:center;justify-content:space-between;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;margin-bottom:18px;font-size:13px;position:sticky;top:10px;z-index:5;flex-wrap:wrap;}
+  .action-bar.show{display:flex;}
+  .nights-stepper{display:flex;align-items:center;gap:6px;}
+  .nights-stepper button{padding:4px 10px;}
+
+  .months{display:grid;grid-template-columns:repeat(4,1fr);gap:34px 24px;}
+  @media (max-width:920px){.months{grid-template-columns:repeat(2,1fr);}}
+  @media (max-width:560px){.months{grid-template-columns:1fr;}}
+  .month h2{font-size:13px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line);}
+  .dow-row, .day-row{display:grid;grid-template-columns:repeat(7,1fr);}
+  .dow-row span{text-align:center;font-size:10.5px;color:var(--muted);font-weight:600;padding-bottom:6px;}
+  .day-cell{display:flex;align-items:center;justify-content:center;padding:2px 0;}
+  .day-num{width:27px;height:27px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11.5px;border:1.3px solid var(--circle-border);color:var(--ink);cursor:pointer;user-select:none;transition:transform .08s;background:#fff;}
+  .day-num.blank{border:none;visibility:hidden;}
+  .day-num.past{color:#c7c7c7;border-color:#ededed;cursor:default;}
+  .day-num.approved{color:#fff;border-color:transparent;}
+  .day-num.pendingstate{background:var(--pending-grey);color:#fff;border-color:transparent;}
+  .day-num.selecting{background:var(--select-blue);color:#fff;border-color:var(--select-blue);}
+  .day-num.selecting.start{box-shadow:0 0 0 2px #fff inset;}
+  .day-num.mine{box-shadow:0 0 0 2px #fff inset;}
+  .day-num.locked{color:#d8d8d8;border-color:#f0f0f0;cursor:not-allowed;}
+  .day-num.soon{color:#b98a4a;border-color:#e9d3ae;}
+  .day-num:not(.past):not(.locked):hover{transform:scale(1.12);}
+
+  .loading-overlay{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:1000;opacity:1;transition:opacity .3s;}
+  .loading-overlay.hide{opacity:0;pointer-events:none;}
+  .loading-text{font-size:13px;color:var(--muted);}
+  .loading-bar-track{width:220px;height:6px;background:var(--line);border-radius:999px;overflow:hidden;}
+  .loading-bar-fill{height:100%;width:0%;background:var(--ink);border-radius:999px;transition:width .2s ease-out;}
+
+  /* ---------- Approvals / Admin tables ---------- */
+  .req-table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px;}
+  .req-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);border-bottom:1px solid var(--line);padding:8px 10px;}
+  .req-table td{border-bottom:1px solid var(--line);padding:10px;vertical-align:middle;}
+  .req-table tr:last-child td{border-bottom:none;}
+  .details-cell{font-size:12px;color:#444;line-height:1.6;}
+  .details-cell b{color:var(--ink);}
+  .empty-state{color:var(--muted);font-size:13px;padding:30px 0;text-align:center;}
+  .req-actions{display:flex;gap:8px;flex-wrap:wrap;}
+
+  .admin-section h3{font-size:14px;margin:26px 0 10px;}
+  .admin-section h3:first-child{margin-top:0;}
+  .admin-add-row{display:flex;gap:8px;margin:6px 0 28px;flex-wrap:wrap;align-items:center;}
+  .admin-add-row input[type="text"], .admin-add-row input:not([type]){min-width:120px;}
+  .admin-add-row input[type="number"]{width:100px;}
+  .admin-add-row input[type="color"]{width:44px;padding:2px;}
+  .admin-add-row label.chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);}
+
+  .change-pin-panel{display:none;position:absolute;right:20px;top:64px;background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.08);padding:16px;width:260px;z-index:20;}
+  .change-pin-panel.show{display:block;}
+  .change-pin-panel label{font-size:12px;color:var(--muted);font-weight:600;display:block;margin-top:8px;}
+  .change-pin-panel input{width:100%;margin-top:4px;}
+  .change-pin-panel .row{display:flex;gap:8px;margin-top:14px;}
+  .change-pin-error{color:var(--danger);font-size:12px;margin-top:8px;min-height:16px;}
+  .change-pin-ok{color:var(--ok);font-size:12px;margin-top:8px;min-height:16px;}
+
+  footer.note{margin-top:40px;font-size:11.5px;color:var(--muted);line-height:1.6;}
+
+  #myDashboard{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin-bottom:22px;}
+  .dash-summary{display:flex;gap:28px;flex-wrap:wrap;}
+  .dash-stat{display:flex;flex-direction:column;}
+  .dash-stat b{font-size:22px;line-height:1.2;}
+  .dash-stat span{font-size:11.5px;color:var(--muted);}
+  .dash-booking-row{display:flex;align-items:center;gap:12px;font-size:13px;padding:7px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;}
+  .dash-booking-row:last-child{border-bottom:none;}
+  .dash-status{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:2px 8px;border-radius:999px;}
+  .dash-status.approved{background:#eef4f0;color:var(--ok);}
+  .dash-status.pending{background:#f0ede6;color:#8a7a4a;}
+  .dash-contact{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);}
+  .dash-contact textarea{width:100%;font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;resize:vertical;}
+
+  #settingsView h3{font-size:14px;margin:26px 0 10px;}
+  #settingsView h3:first-of-type{margin-top:0;}
+  #settingsView textarea{width:100%;font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;resize:vertical;}
+  .settings-pin-fields{display:flex;flex-direction:column;gap:8px;max-width:280px;}
+  .faq-list p{margin:0 0 14px;}
+  .back-link{font-size:12px;color:var(--muted);cursor:pointer;display:inline-block;margin-bottom:16px;}
+  .back-link:hover{color:var(--ink);}
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay" style="display:none;">
+  <div class="loading-text" id="loadingText">Loading…</div>
+  <div class="loading-bar-track"><div class="loading-bar-fill" id="loadingBarFill"></div></div>
+</div>
+
+<div class="popup-overlay" id="popupOverlay">
+  <div class="popup-box" id="popupBox">
+    <button class="popup-close" id="popupCloseBtn" type="button">&times;</button>
+    <div class="popup-text" id="popupText"></div>
+  </div>
+</div>
+
+<div class="popup-overlay" id="rejectOverlay">
+  <div class="popup-box">
+    <button class="popup-close" id="rejectCloseBtn" type="button">&times;</button>
+    <h3>Reject this request?</h3>
+    <label style="font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px;">Note for the investor (optional)</label>
+    <textarea id="rejectNoteInput" rows="2"></textarea>
+    <label class="chk"><input type="checkbox" id="rejectSendEmailInput"> Send rejection email now (placeholder wording until you draft your own)</label>
+    <div class="row">
+      <button class="secondary" id="rejectCancelBtn" style="flex:1;" type="button">Cancel</button>
+      <button class="danger" id="rejectConfirmBtn" style="flex:1;" type="button">Reject</button>
+    </div>
+  </div>
+</div>
+
+<div id="loginScreen" class="login-screen">
+  <h1>Shared House</h1>
+  <p>Enter your email and PIN to see and manage bookings.</p>
+  <form class="login-form" id="loginForm">
+    <label for="identifierInput">Email</label>
+    <input id="identifierInput" type="text" autocomplete="off" placeholder="you@example.com" required>
+    <label for="pinInput">PIN</label>
+    <input id="pinInput" type="password" inputmode="numeric" maxlength="8" required>
+    <button type="submit">Log in</button>
+    <div class="login-error" id="loginError"></div>
+    <a href="#" id="forgotPinLink" style="font-size:12px;color:var(--muted);text-align:center;margin-top:4px;">Forgot your PIN?</a>
+  </form>
+</div>
+
+<div id="forgotPinScreen" class="login-screen" style="display:none;">
+  <h1>Request a new PIN</h1>
+  <p>Enter your email — if it's on file, we'll send you a new PIN.</p>
+  <form class="login-form" id="forgotPinForm">
+    <label for="forgotEmailInput">Email</label>
+    <input id="forgotEmailInput" type="text" autocomplete="off" placeholder="you@example.com" required>
+    <button type="submit">Send new PIN</button>
+    <div class="login-error" id="forgotPinMsg"></div>
+    <a href="#" id="backToLoginLink" style="font-size:12px;color:var(--muted);text-align:center;margin-top:4px;">Back to login</a>
+  </form>
+</div>
+
+<div class="wrap" id="app" style="display:none;">
+  <header class="app-header">
+    <div class="title">
+      <h1 id="pageTitle">Shared House — Booking Calendar</h1>
+      <p>Pick a start day (stays are at least 7 nights), then submit for approval. Nothing is confirmed until the admin approves it.</p>
+    </div>
+    <div class="auth-box">
+      <span class="who"><span class="dot" id="whoDot"></span><span id="whoName"></span></span>
+      <button class="ghost" id="settingsBtn" style="display:none;">Settings</button>
+      <button class="ghost" id="changePinBtn">Change PIN</button>
+      <button class="ghost" id="logoutBtn">Log out</button>
+    </div>
+  </header>
+
+  <div class="change-pin-panel" id="changePinPanel">
+    <label for="curPinInput">Current PIN</label>
+    <input id="curPinInput" type="password" inputmode="numeric" maxlength="8">
+    <label for="newPinInput">New PIN</label>
+    <input id="newPinInput" type="password" inputmode="numeric" maxlength="8">
+    <label for="newPinConfirm">Confirm new PIN</label>
+    <input id="newPinConfirm" type="password" inputmode="numeric" maxlength="8">
+    <div class="change-pin-error" id="changePinError"></div>
+    <div class="change-pin-ok" id="changePinOk"></div>
+    <div class="row">
+      <button class="secondary" id="changePinCancel" style="flex:1;">Cancel</button>
+      <button id="changePinSave" style="flex:1;">Save</button>
+    </div>
+  </div>
+
+  <div class="nav-tabs" id="navTabs" style="display:none;">
+    <button class="nav-tab active" id="navCalendar">Calendar</button>
+    <button class="nav-tab" id="navApprovals">Approvals</button>
+    <button class="nav-tab" id="navAdmin">Admin</button>
+  </div>
+
+  <div class="admin-bar" id="adminBar" style="display:none;">
+    <div class="field"><b>House:</b> <select id="houseSelect"></select></div>
+    <div class="field"><b>Acting as:</b> <select id="actingAsSelect"></select></div>
+    <span style="color:#8a7a4a;">— on this page you book/cancel directly, no approval needed.</span>
+  </div>
+
+  <div class="msg-banner" id="msgBanner"></div>
+
+  <!-- ============ MY BOOKINGS (investors only) ============ -->
+  <div id="myDashboard" style="display:none;">
+    <div class="dash-summary" id="myDashboardSummary"></div>
+    <h3 style="font-size:13px;margin:18px 0 8px;">Your stays</h3>
+    <p style="font-size:11.5px;color:var(--muted);margin:0 0 10px;">Need to change dates on a stay, not just cancel it? Cancel it below and submit a new request, or contact the host.</p>
+    <div id="myDashboardList"></div>
+    <div class="dash-contact">
+      <h3 style="font-size:13px;margin:0 0 8px;">Contact the host</h3>
+      <textarea id="contactMessage" rows="3" placeholder="Question or request for the host..."></textarea>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
+        <button id="sendContactBtn" type="button">Send</button>
+        <span id="contactStatus" style="font-size:12px;color:var(--muted);"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CALENDAR VIEW ============ -->
+  <div id="calendarView">
+    <div class="toolbar">
+      <div class="year-tabs" id="yearTabs"></div>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div class="state-key" id="stateKey"></div>
+
+    <div class="lock-banner" id="lockBanner" style="display:none;"></div>
+
+    <div class="action-bar" id="actionBar">
+      <span id="actionText"></span>
+      <span style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <span class="nights-stepper">
+          <button class="secondary" id="nightsMinus" type="button">–</button>
+          <span id="nightsCount">7</span> nights
+          <button class="secondary" id="nightsPlus" type="button">+</button>
+        </span>
+        <button class="secondary" id="clearSelectionBtn">Clear</button>
+        <button id="confirmBookBtn">Submit for approval</button>
+      </span>
+    </div>
+
+    <div class="months" id="months"></div>
+  </div>
+
+  <!-- ============ APPROVALS VIEW (admin only) ============ -->
+  <div id="approvalsView" style="display:none;">
+    <table class="req-table">
+      <thead>
+        <tr><th>House</th><th>Investor</th><th>Stay</th><th>Details</th><th>Submitted</th><th></th></tr>
+      </thead>
+      <tbody id="approvalsBody"></tbody>
+    </table>
+    <div class="empty-state" id="approvalsEmpty" style="display:none;">No pending requests right now.</div>
+  </div>
+
+  <!-- ============ ADMIN DATA VIEW (admin only) ============ -->
+  <div id="adminView" style="display:none;" class="admin-section">
+    <h3>Houses</h3>
+    <table class="req-table">
+      <thead><tr><th>House ID</th><th>Name</th><th></th></tr></thead>
+      <tbody id="housesBody"></tbody>
+    </table>
+    <div class="admin-add-row">
+      <input id="newHouseId" type="text" placeholder="House ID (e.g. sweden1)">
+      <input id="newHouseName" type="text" placeholder="House name">
+      <button id="addHouseBtn">Add house</button>
+    </div>
+
+    <h3>Investors &amp; admins</h3>
+    <table class="req-table">
+      <thead><tr><th>Name</th><th>Email</th><th>House</th><th>Color</th><th>Admin?</th><th>Quota (nights)</th><th>Booked this year</th><th></th></tr></thead>
+      <tbody id="usersBody"></tbody>
+    </table>
+    <div class="admin-add-row">
+      <input id="newUserName" type="text" placeholder="Name">
+      <input id="newUserEmail" type="text" placeholder="Email">
+      <select id="newUserHouse"></select>
+      <input id="newUserColor" type="color" value="#6b6b6b">
+      <input id="newUserQuota" type="number" placeholder="Quota nights" value="28">
+      <input id="newUserPin" type="text" placeholder="PIN">
+      <label class="chk"><input id="newUserIsAdmin" type="checkbox"> Admin</label>
+      <button id="addUserBtn">Add investor</button>
+    </div>
+
+    <h3>All bookings (every house, every year, every status)</h3>
+    <table class="req-table">
+      <thead><tr><th>House</th><th>Investor</th><th>Stay</th><th>Status</th><th>Submitted</th><th>Decided</th></tr></thead>
+      <tbody id="allBookingsBody"></tbody>
+    </table>
+    <div class="empty-state" id="allBookingsEmpty" style="display:none;">No bookings recorded yet.</div>
+  </div>
+
+  <!-- ============ SETTINGS VIEW (investors only) ============ -->
+  <div id="settingsView" style="display:none;">
+    <span class="back-link" id="settingsBackLink">&larr; Back to calendar</span>
+
+    <h3>Your color</h3>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 10px;">This is the color your approved stays show up in on the calendar (to the host — other investors just see "booked").</p>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:26px;">
+      <input type="color" id="settingsColorInput">
+      <button id="saveColorBtn" type="button">Save color</button>
+      <span id="colorStatus" style="font-size:12px;"></span>
+    </div>
+
+    <h3>Change PIN</h3>
+    <div class="settings-pin-fields">
+      <input id="settingsCurPin" type="password" inputmode="numeric" maxlength="8" placeholder="Current PIN">
+      <input id="settingsNewPin" type="password" inputmode="numeric" maxlength="8" placeholder="New PIN">
+      <input id="settingsNewPinConfirm" type="password" inputmode="numeric" maxlength="8" placeholder="Confirm new PIN">
+      <button id="settingsSavePinBtn" type="button">Update PIN</button>
+      <span id="settingsPinStatus" style="font-size:12px;"></span>
+    </div>
+
+    <h3>FAQ</h3>
+    <div class="faq-list">
+      <p><b>How far ahead can I book?</b><br>Only the current year and next year are open for booking.</p>
+      <p><b>What's the shortest stay I can request?</b><br>7 nights minimum — extend a night at a time from there.</p>
+      <p><b>How much notice do I need to give?</b><br>At least 3 weeks before the start date. Inside that window, you'll need to contact the host directly.</p>
+      <p><b>What happens after I submit a request?</b><br>It shows as pending until the host approves or rejects it — you'll get a notification either way.</p>
+      <p><b>How do I cancel a stay?</b><br>Click on it in the calendar and confirm.</p>
+      <p><b>How do I change the dates on an approved stay?</b><br>Cancel it and submit a new request, or contact the host.</p>
+      <p><b>I forgot my PIN — now what?</b><br>Use "Forgot your PIN?" on the login screen.</p>
+    </div>
+
+    <h3>Request information from the host</h3>
+    <textarea id="settingsRequestInfo" rows="3" placeholder="What would you like to know?"></textarea>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
+      <button id="sendRequestInfoBtn" type="button">Send</button>
+      <span id="requestInfoStatus" style="font-size:12px;color:var(--muted);"></span>
+    </div>
+  </div>
+
+  <footer class="note">
+    Stays are flexible: pick any start day, minimum 7 nights, then extend a night at a time. Investor requests need at least 3 weeks' notice, so unclaimed time can still be listed elsewhere. Gaps are measured against approved stays only, in whole days between them.
+  </footer>
+</div>
+
+<script>
+/* ============ CONFIG — edit this line ============ */
+const CONFIG = {
+  SUPABASE_URL: "PASTE_YOUR_SUPABASE_PROJECT_URL_HERE",      // e.g. https://abcdefgh.supabase.co
+  SUPABASE_ANON_KEY: "PASTE_YOUR_SUPABASE_ANON_KEY_HERE",    // public by design (RLS + the Edge Function's own checks protect the data) — same trust level the old Apps Script URL had
+};
+const API_URL = CONFIG.SUPABASE_URL + '/functions/v1/api';
+/* ==================================================== */
+
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DOW_LABELS = ["M","T","W","T","F","S","S"];
+const MIN_NIGHTS = 7;
+const MIN_ADVANCE_DAYS = 21;
+const OVERVIEW_MODE = '__overview__'; // admin "acting as" value meaning "just looking, not booking for anyone"
+
+let state = {
+  me:null, session:null, houses:[], currentHouseId:null, actingAs:null,
+  users:[], bookings:[], serverNow:null, selectedYear:null,
+  selection:null, view:'calendar', adminHouses:[], adminUsers:[], allBookings:[],
+};
+
+// ---------- Date helpers (dates are always plain 'YYYY-MM-DD' strings) ----------
+function pad2(n){ return String(n).padStart(2,'0'); }
+function formatISODate(d){ return d.getUTCFullYear()+'-'+pad2(d.getUTCMonth()+1)+'-'+pad2(d.getUTCDate()); }
+function parseISODate(s){ const p=s.split('-').map(Number); return new Date(Date.UTC(p[0],p[1]-1,p[2])); }
+function addDaysISO(s, days){ const d=parseISODate(s); d.setUTCDate(d.getUTCDate()+days); return formatISODate(d); }
+function daysBetween(a,b){ return Math.round((parseISODate(b)-parseISODate(a))/86400000); }
+function nightsOf(b){ return daysBetween(b.startDate,b.endDate)+1; }
+function yearOf(iso){ return Number(iso.slice(0,4)); }
+function todayISO(){ return formatISODate(state.serverNow); }
+function curYear(){ return state.serverNow.getUTCFullYear(); }
+function sumNights(list){ return list.reduce((sum,b)=>sum+nightsOf(b),0); }
+function quotaBadgeText(approved, pending, quota){
+  const total = approved + pending;
+  return `${total}/${quota} nights${pending?` (${pending} days pending)`:''}`;
+}
+
+// Apps Script's Web App occasionally serves a malformed redirect response
+// instead of JSON (a Google-side hiccup, not something this app controls) —
+// without this, that throws an unhandled rejection that leaves the UI
+// stuck (e.g. on the loading screen) with no explanation. One silent retry
+// clears almost all of these; if it still fails, callers get a normal
+// {ok:false, error} they already know how to show.
+async function fetchJson_(url, options){
+  for (let attempt = 0; attempt < 2; attempt++){
+    const controller = new AbortController();
+    const timeout = setTimeout(()=>controller.abort(), 15000);
+    try {
+      const res = await fetch(url, Object.assign({signal: controller.signal}, options));
+      return await res.json();
+    } catch (e) {
+      if (attempt === 1) return { ok:false, error:'The server is taking too long to respond — please try again.' };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+}
+// Supabase Edge Functions sit behind the platform's own gatekeeper, which
+// wants the anon key on every request even though our function does its
+// own PIN-based auth on top — the anon key is public by design (same
+// trust level the old Apps Script URL had), never the service-role key.
+function supabaseHeaders(extra){
+  return Object.assign({ apikey: CONFIG.SUPABASE_ANON_KEY, Authorization: 'Bearer ' + CONFIG.SUPABASE_ANON_KEY }, extra||{});
+}
+async function apiGet(action, extra){
+  return fetchJson_(API_URL + '?action=' + action + (extra||''), { headers: supabaseHeaders() });
+}
+async function apiPost(payload){
+  return fetchJson_(API_URL, {
+    method:'POST', headers:supabaseHeaders({'Content-Type':'application/json'}), body:JSON.stringify(payload),
+  });
+}
+// Session lives only in memory, on purpose — reopening or reloading the
+// page always requires the PIN again, it's never silently remembered.
+function session(){ return state.session || {}; }
+function apiPostAdmin(extra){ const s=session(); return apiPost(Object.assign({name:s.name, pin:s.pin}, extra)); }
+
+// ---------- Loading overlay ----------
+// Apps Script's cold start can take a few seconds; without this the page
+// just looks stuck. The bar's percentage is a simulated "trickle" toward
+// 90%, not a real byte-level measurement (there isn't one to measure for a
+// small JSON call) — it jumps to 100% and fades out once the real request
+// actually finishes.
+let loadingTimer = null;
+function showLoading(text){
+  clearInterval(loadingTimer);
+  const overlay = document.getElementById('loadingOverlay');
+  const fill = document.getElementById('loadingBarFill');
+  document.getElementById('loadingText').textContent = text || 'Loading…';
+  fill.style.width = '0%';
+  overlay.style.display = 'flex';
+  overlay.classList.remove('hide');
+  let pct = 0;
+  loadingTimer = setInterval(()=>{
+    pct += (90 - pct) * 0.15 + 0.5;
+    if (pct > 90) pct = 90;
+    fill.style.width = pct + '%';
+  }, 200);
+}
+function hideLoading(){
+  clearInterval(loadingTimer);
+  const overlay = document.getElementById('loadingOverlay');
+  document.getElementById('loadingBarFill').style.width = '100%';
+  setTimeout(()=>{
+    overlay.classList.add('hide');
+    setTimeout(()=>{ overlay.style.display='none'; }, 300);
+  }, 200);
+}
+
+document.getElementById('loginForm').addEventListener('submit', async (ev)=>{
+  ev.preventDefault();
+  const identifier = document.getElementById('identifierInput').value.trim();
+  const pin = document.getElementById('pinInput').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent='';
+  showLoading('Logging in…');
+  try {
+    const res = await apiPost({action:'login', identifier, pin});
+    if (!res.ok){ errEl.textContent = res.error || 'Login failed.'; return; }
+    state.session = { name: res.user.name, pin };
+    await afterLogin(res);
+  } finally {
+    hideLoading();
+  }
+});
+
+document.getElementById('forgotPinLink').addEventListener('click', (ev)=>{
+  ev.preventDefault();
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('forgotPinScreen').style.display='block';
+  document.getElementById('forgotEmailInput').value='';
+  document.getElementById('forgotPinMsg').textContent='';
+  document.getElementById('forgotPinMsg').style.color='';
+});
+document.getElementById('backToLoginLink').addEventListener('click', (ev)=>{
+  ev.preventDefault();
+  document.getElementById('forgotPinScreen').style.display='none';
+  document.getElementById('loginScreen').style.display='block';
+});
+document.getElementById('forgotPinForm').addEventListener('submit', async (ev)=>{
+  ev.preventDefault();
+  const email = document.getElementById('forgotEmailInput').value.trim();
+  const msgEl = document.getElementById('forgotPinMsg');
+  showLoading('Sending…');
+  try {
+    await apiPost({action:'requestPinReset', email});
+  } finally {
+    hideLoading();
+  }
+  // Always the same message, whether or not the email was found — so this
+  // screen can't be used to check which emails are registered.
+  msgEl.style.color = 'var(--ok)';
+  msgEl.textContent = "If that email is on file, we've sent a new PIN to it.";
+});
+
+async function afterLogin(res){
+  state.me = res.user;
+  state.houses = res.houses || [];
+  state.currentHouseId = state.me.isAdmin ? (state.houses[0] && state.houses[0].id) : state.me.houseId;
+  state.actingAs = state.me.isAdmin ? null : state.me.name;
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('navTabs').style.display = state.me.isAdmin ? 'flex' : 'none';
+  document.getElementById('settingsBtn').style.display = state.me.isAdmin ? 'none' : 'inline-block';
+  document.getElementById('changePinBtn').style.display = state.me.isAdmin ? 'inline-block' : 'none';
+  await loadData();
+  renderAll();
+  if (res.notifications && res.notifications.length) showNotifications(res.notifications.slice());
+}
+
+// One at a time — approving/rejecting several requests while someone was
+// logged out shows them one popup per decision, in order, not a pile-up.
+function showNotifications(queue){
+  if (!queue.length) return;
+  const n = queue.shift();
+  apiPost({action:'acknowledgeNotification', name: state.session.name, pin: state.session.pin, id: n.id});
+  const text = n.status==='approved'
+    ? `Your request has been approved!\n${n.startDate} → ${n.endDate}.`
+    : `Your request for ${n.startDate} → ${n.endDate} was not approved.` + (n.adminNote ? `\n\nNote: ${n.adminNote}` : '');
+  showMsg(n.status==='approved' ? 'info' : 'error', text, () => showNotifications(queue));
+}
+
+document.getElementById('logoutBtn').addEventListener('click', ()=>{
+  state.session = null; location.reload();
+});
+
+// ---------- Change PIN ----------
+const changePinPanel = document.getElementById('changePinPanel');
+document.getElementById('changePinBtn').addEventListener('click', ()=>{
+  changePinPanel.classList.toggle('show');
+  document.getElementById('curPinInput').value='';
+  document.getElementById('newPinInput').value='';
+  document.getElementById('newPinConfirm').value='';
+  document.getElementById('changePinError').textContent='';
+  document.getElementById('changePinOk').textContent='';
+});
+document.getElementById('changePinCancel').addEventListener('click', ()=>{
+  changePinPanel.classList.remove('show');
+});
+document.getElementById('changePinSave').addEventListener('click', async ()=>{
+  const curPin = document.getElementById('curPinInput').value;
+  const newPin = document.getElementById('newPinInput').value;
+  const confirmPin = document.getElementById('newPinConfirm').value;
+  const errEl = document.getElementById('changePinError');
+  const okEl = document.getElementById('changePinOk');
+  errEl.textContent=''; okEl.textContent='';
+
+  if (!curPin || !newPin || !confirmPin){ errEl.textContent='Fill in all three fields.'; return; }
+  if (newPin !== confirmPin){ errEl.textContent='New PIN and confirmation don\'t match.'; return; }
+  if (newPin.length < 4){ errEl.textContent='PIN should be at least 4 characters.'; return; }
+
+  const res = await apiPost({ action:'changePin', name: state.me.name, pin: curPin, newPin });
+  if (!res.ok){ errEl.textContent = res.error || 'Could not update PIN.'; return; }
+
+  state.session = { name: state.me.name, pin: newPin };
+  okEl.textContent = 'PIN updated.';
+  setTimeout(()=>changePinPanel.classList.remove('show'), 1200);
+});
+
+async function loadData(){
+  const data = await apiGet('data', '&house='+encodeURIComponent(state.currentHouseId||''));
+  // getData() never had an {ok} wrapper (unlike every POST action), so a
+  // transient fetch failure — which fetchJson_ turns into {ok:false, error}
+  // — used to fall straight through the "|| []" defaults below and wipe the
+  // whole calendar to empty instead of just failing to refresh. That's most
+  // visible right after a successful booking: the write goes through, but
+  // if the very next refresh hits the glitch, everything you just booked
+  // (and everyone else's stays) would appear to vanish — easily read as
+  // "the Book button doesn't work." Keep whatever was last loaded instead.
+  if (!data || data.error){
+    showMsg('error', (data && data.error) || 'Could not refresh — showing the last loaded data.');
+    return;
+  }
+  state.users = data.users || [];
+  state.bookings = data.bookings || [];
+  state.serverNow = data.serverNow ? new Date(data.serverNow) : new Date();
+  if (!state.selectedYear) state.selectedYear = curYear();
+}
+
+// ---------- Nav ----------
+document.getElementById('navCalendar').addEventListener('click', ()=>switchView('calendar'));
+document.getElementById('navApprovals').addEventListener('click', ()=>switchView('approvals'));
+document.getElementById('navAdmin').addEventListener('click', ()=>switchView('admin'));
+let approvalsRefreshTimer = null;
+function switchView(v){
+  state.view = v;
+  document.getElementById('navCalendar').classList.toggle('active', v==='calendar');
+  document.getElementById('navApprovals').classList.toggle('active', v==='approvals');
+  document.getElementById('navAdmin').classList.toggle('active', v==='admin');
+  document.getElementById('calendarView').style.display = v==='calendar' ? 'block':'none';
+  document.getElementById('approvalsView').style.display = v==='approvals' ? 'block':'none';
+  document.getElementById('adminView').style.display = v==='admin' ? 'block':'none';
+  document.getElementById('settingsView').style.display = v==='settings' ? 'block':'none';
+  document.getElementById('myDashboard').style.display = (v==='calendar' && !state.me.isAdmin) ? 'block':'none';
+  document.getElementById('adminBar').style.display = (v==='calendar' && state.me.isAdmin) ? 'flex':'none';
+
+  clearInterval(approvalsRefreshTimer);
+  if (v==='approvals'){
+    loadApprovals();
+    // New requests can arrive at any time while this tab is open — a manual
+    // switch-away-and-back was the only way to see them otherwise, which is
+    // exactly the bug that got reported.
+    approvalsRefreshTimer = setInterval(loadApprovals, 20000);
+  }
+  if (v==='admin') loadAdminData();
+  if (v==='settings') renderSettingsView();
+  if (v==='calendar') loadData().then(renderAll);
+}
+document.getElementById('settingsBtn').addEventListener('click', ()=>switchView('settings'));
+document.getElementById('settingsBackLink').addEventListener('click', ()=>switchView('calendar'));
+
+// ---------- Rendering: shared ----------
+function userByName(name){ return state.users.find(u=>u.name===name); }
+function bookingForDate(iso){ return state.bookings.find(b=> iso>=b.startDate && iso<=b.endDate); }
+
+function renderAll(){
+  renderWho(); renderAdminBar(); renderYearTabs(); renderLegend(); renderStateKey(); renderLockBanner(); renderMonths(); renderActionBar(); renderMyDashboard();
+}
+function renderMyDashboard(){
+  const wrap = document.getElementById('myDashboard');
+  if (state.me.isAdmin || state.view!=='calendar'){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+
+  const mine = state.bookings.filter(b=>b.userName===state.me.name && yearOf(b.startDate)===state.selectedYear);
+  const approved = mine.filter(b=>b.status==='approved');
+  const pending = mine.filter(b=>b.status==='pending');
+  const approvedNights = sumNights(approved);
+  const pendingNights = sumNights(pending);
+  const remaining = state.me.quotaNights - approvedNights - pendingNights;
+
+  document.getElementById('myDashboardSummary').innerHTML = `
+    <div class="dash-stat"><b>${remaining}</b><span>nights remaining (${state.selectedYear})</span></div>
+    <div class="dash-stat"><b>${approvedNights + pendingNights}</b><span>nights booked${pendingNights?` (${pendingNights} pending)`:''}</span></div>
+  `;
+
+  const list = document.getElementById('myDashboardList');
+  const all = approved.concat(pending).sort((a,b)=> a.startDate<b.startDate?-1:1);
+  if (!all.length){
+    list.innerHTML = '<div class="empty-state" style="padding:10px 0;">No stays yet for '+state.selectedYear+'.</div>';
+  } else {
+    list.innerHTML = all.map(b=>`
+      <div class="dash-booking-row">
+        <span class="dash-status ${b.status}">${b.status==='approved'?'Approved':'Sent for approval'}</span>
+        <span>${b.startDate} → ${b.endDate}</span>
+        <span style="color:var(--muted)">${nightsOf(b)} nights</span>
+      </div>`).join('');
+  }
+}
+document.getElementById('sendContactBtn').addEventListener('click', async ()=>{
+  const message = document.getElementById('contactMessage').value.trim();
+  const statusEl = document.getElementById('contactStatus');
+  if (!message){ statusEl.style.color='var(--danger)'; statusEl.textContent='Write a message first.'; return; }
+  const s = session();
+  statusEl.style.color='var(--muted)'; statusEl.textContent='Sending…';
+  const res = await apiPost({action:'contactHost', name:s.name, pin:s.pin, message});
+  if (res.ok){
+    statusEl.style.color='var(--ok)'; statusEl.textContent='Sent!';
+    document.getElementById('contactMessage').value='';
+  } else {
+    statusEl.style.color='var(--danger)'; statusEl.textContent = res.error || 'Could not send.';
+  }
+});
+
+// ---------- Settings view (investors only) ----------
+function renderSettingsView(){
+  document.getElementById('settingsColorInput').value = state.me.color;
+  document.getElementById('colorStatus').textContent = '';
+  document.getElementById('settingsPinStatus').textContent = '';
+  document.getElementById('requestInfoStatus').textContent = '';
+}
+document.getElementById('saveColorBtn').addEventListener('click', async ()=>{
+  const color = document.getElementById('settingsColorInput').value;
+  const statusEl = document.getElementById('colorStatus');
+  statusEl.style.color='var(--muted)'; statusEl.textContent='Saving…';
+  const s = session();
+  const res = await apiPost({action:'updateMyColor', name:s.name, pin:s.pin, color});
+  if (res.ok){
+    state.me.color = color;
+    renderWho();
+    statusEl.style.color='var(--ok)'; statusEl.textContent='Saved.';
+    await loadData(); renderAll();
+  } else {
+    statusEl.style.color='var(--danger)'; statusEl.textContent = res.error || 'Could not save.';
+  }
+});
+document.getElementById('settingsSavePinBtn').addEventListener('click', async ()=>{
+  const curPin = document.getElementById('settingsCurPin').value;
+  const newPin = document.getElementById('settingsNewPin').value;
+  const confirmPin = document.getElementById('settingsNewPinConfirm').value;
+  const statusEl = document.getElementById('settingsPinStatus');
+  if (!curPin || !newPin || !confirmPin){ statusEl.style.color='var(--danger)'; statusEl.textContent='Fill in all three fields.'; return; }
+  if (newPin !== confirmPin){ statusEl.style.color='var(--danger)'; statusEl.textContent="New PIN and confirmation don't match."; return; }
+  if (newPin.length < 4){ statusEl.style.color='var(--danger)'; statusEl.textContent='PIN should be at least 4 characters.'; return; }
+  const res = await apiPost({ action:'changePin', name: state.me.name, pin: curPin, newPin });
+  if (!res.ok){ statusEl.style.color='var(--danger)'; statusEl.textContent = res.error || 'Could not update PIN.'; return; }
+  state.session = { name: state.me.name, pin: newPin };
+  statusEl.style.color='var(--ok)'; statusEl.textContent='PIN updated.';
+  document.getElementById('settingsCurPin').value='';
+  document.getElementById('settingsNewPin').value='';
+  document.getElementById('settingsNewPinConfirm').value='';
+});
+document.getElementById('sendRequestInfoBtn').addEventListener('click', async ()=>{
+  const message = document.getElementById('settingsRequestInfo').value.trim();
+  const statusEl = document.getElementById('requestInfoStatus');
+  if (!message){ statusEl.style.color='var(--danger)'; statusEl.textContent='Write a message first.'; return; }
+  const s = session();
+  statusEl.style.color='var(--muted)'; statusEl.textContent='Sending…';
+  const res = await apiPost({action:'contactHost', name:s.name, pin:s.pin, message});
+  if (res.ok){
+    statusEl.style.color='var(--ok)'; statusEl.textContent='Sent!';
+    document.getElementById('settingsRequestInfo').value='';
+  } else {
+    statusEl.style.color='var(--danger)'; statusEl.textContent = res.error || 'Could not send.';
+  }
+});
+function renderWho(){
+  document.getElementById('whoName').textContent = state.me.name + (state.me.isAdmin ? ' (admin)' : '');
+  document.getElementById('whoDot').style.background = state.me.isAdmin ? '#6b6b6b' : state.me.color;
+}
+function renderAdminBar(){
+  const bar = document.getElementById('adminBar');
+  if (!state.me.isAdmin){ bar.style.display='none'; return; }
+  bar.style.display = state.view==='calendar' ? 'flex' : 'none';
+
+  const hs = document.getElementById('houseSelect');
+  hs.innerHTML='';
+  state.houses.forEach(h=>{ const o=document.createElement('option'); o.value=h.id; o.textContent=h.name; if(h.id===state.currentHouseId)o.selected=true; hs.appendChild(o); });
+  hs.onchange = async ()=>{ state.currentHouseId=hs.value; state.actingAs=null; state.selection=null; await loadData(); renderAll(); };
+
+  const sel = document.getElementById('actingAsSelect');
+  sel.innerHTML='';
+  const overviewOpt = document.createElement('option');
+  overviewOpt.value = OVERVIEW_MODE; overviewOpt.textContent = '— Admin overview (view only) —';
+  sel.appendChild(overviewOpt);
+  state.users.forEach(u=>{ const o=document.createElement('option'); o.value=u.name; o.textContent=u.name; if(u.name===state.actingAs)o.selected=true; sel.appendChild(o); });
+  if (!state.actingAs){ state.actingAs = OVERVIEW_MODE; }
+  sel.value = state.actingAs;
+  sel.onchange = ()=>{ state.actingAs=sel.value; state.selection=null; renderAll(); };
+}
+function renderYearTabs(){
+  const wrap = document.getElementById('yearTabs'); wrap.innerHTML='';
+  const cy = curYear();
+  [cy, cy+1, cy+2].forEach(y=>{
+    const b = document.createElement('button');
+    b.className = 'year-tab' + (y===state.selectedYear?' active':'') + (y>cy+1?' locked':'');
+    b.textContent = y + (y>cy+1 ? ' 🔒' : '');
+    b.onclick = ()=>{ state.selectedYear=y; state.selection=null; renderAll(); };
+    wrap.appendChild(b);
+  });
+}
+function renderLegend(){
+  const wrap = document.getElementById('legend'); wrap.innerHTML='';
+  if (state.me.isAdmin){
+    state.users.forEach(u=>{
+      const approved = sumNights(state.bookings.filter(b=>b.userName===u.name && b.status==='approved' && yearOf(b.startDate)===state.selectedYear));
+      const pending = sumNights(state.bookings.filter(b=>b.userName===u.name && b.status==='pending' && yearOf(b.startDate)===state.selectedYear));
+      const item = document.createElement('div'); item.className='legend-item';
+      item.innerHTML = `<span class="dot" style="background:${u.color}"></span>${u.name} <span class="quota-badge">${quotaBadgeText(approved,pending,u.quotaNights)}</span>`;
+      wrap.appendChild(item);
+    });
+  } else {
+    // Your own nights-remaining/booked numbers now live in the dashboard
+    // panel above the calendar — this just keeps the color key for reading
+    // the grid itself.
+    const mine = document.createElement('div'); mine.className='legend-item';
+    mine.innerHTML = `<span class="dot" style="background:${state.me.color}"></span>You`;
+    const others = document.createElement('div'); others.className='legend-item';
+    others.innerHTML = `<span class="dot" style="background:var(--unavailable)"></span>Other investors (booked)`;
+    wrap.appendChild(mine); wrap.appendChild(others);
+  }
+}
+function renderStateKey(){
+  const wrap = document.getElementById('stateKey'); wrap.innerHTML='';
+  const items = [
+    [`var(--select-blue)`, 'Selecting (not yet submitted)'],
+  ];
+  if (state.me.isAdmin) {
+    items.push(['#999', 'Approved (own color per investor)']);
+    items.push(['#999', 'Pending (own color, faded — hover for who)']);
+  } else {
+    items.push([`var(--pending-grey)`, 'Submitted, awaiting approval']);
+    items.push(['#999', 'Your approved stay (your color)']);
+    items.push(['var(--unavailable)', 'Booked by someone else']);
+  }
+  items.forEach(([color,label])=>{
+    const span = document.createElement('span');
+    span.innerHTML = `<span class="key-swatch" style="background:${color}"></span>${label}`;
+    wrap.appendChild(span);
+  });
+}
+function renderLockBanner(){
+  const cy = curYear();
+  const banner = document.getElementById('lockBanner');
+  if (state.selectedYear > cy+1){
+    banner.style.display='block';
+    banner.textContent = `${state.selectedYear} isn't open for booking yet — it unlocks once ${state.selectedYear-1} arrives. Read-only preview.`;
+  } else banner.style.display='none';
+}
+function canInteract(){ return state.selectedYear <= curYear()+1; }
+function minBookableStart(){ return state.me.isAdmin ? null : addDaysISO(todayISO(), MIN_ADVANCE_DAYS); }
+function selectionEndDate(){ return state.selection ? addDaysISO(state.selection.startDate, state.selection.nights-1) : null; }
+function isInSelection(iso){ return state.selection && iso>=state.selection.startDate && iso<=selectionEndDate(); }
+function conflictInRange(startISO, endISO){
+  return state.bookings.find(b=> b.status!=='rejected' && startISO<=b.endDate && b.startDate<=endISO);
+}
+
+function renderMonths(){
+  const wrap = document.getElementById('months'); wrap.innerHTML='';
+  const year = state.selectedYear;
+  const today = todayISO();
+  const minStart = minBookableStart();
+  const interactive = canInteract();
+
+  for (let m=0;m<12;m++){
+    const monthEl = document.createElement('div'); monthEl.className='month';
+    const h2 = document.createElement('h2'); h2.textContent = MONTH_NAMES[m]; monthEl.appendChild(h2);
+    const dowRow = document.createElement('div'); dowRow.className='dow-row';
+    DOW_LABELS.forEach(l=>{ const s=document.createElement('span'); s.textContent=l; dowRow.appendChild(s); });
+    monthEl.appendChild(dowRow);
+
+    const firstOfMonth = new Date(Date.UTC(year,m,1));
+    let startOffset = firstOfMonth.getUTCDay(); startOffset = startOffset===0?6:startOffset-1;
+    const daysInMonth = new Date(Date.UTC(year,m+1,0)).getUTCDate();
+    const totalCells = Math.ceil((startOffset+daysInMonth)/7)*7;
+    const grid = document.createElement('div'); grid.style.display='grid';
+
+    for (let i=0;i<totalCells;i+=7){
+      const rowEl = document.createElement('div'); rowEl.className='day-row';
+      for (let j=0;j<7;j++){
+        const cellIndex=i+j, dayNum=cellIndex-startOffset+1;
+        const cellWrap = document.createElement('div'); cellWrap.className='day-cell';
+        if (dayNum<1 || dayNum>daysInMonth){
+          const blank=document.createElement('div'); blank.className='day-num blank'; cellWrap.appendChild(blank);
+        } else {
+          const iso = year+'-'+pad2(m+1)+'-'+pad2(dayNum);
+          const entry = bookingForDate(iso);
+          const isPast = iso < today;
+          const tooSoon = !entry && minStart && iso < minStart;
+
+          const num = document.createElement('div');
+          num.className='day-num'; num.textContent=dayNum;
+          num.dataset.iso = iso;
+
+          if (!interactive) num.classList.add('locked');
+          else if (isPast) num.classList.add('past');
+          else if (tooSoon){ num.classList.add('soon'); num.title = "Within 3 weeks — click for details"; }
+
+          if (entry){
+            const mine = entry.userName===state.actingAs;
+            if (entry.status==='approved'){
+              num.classList.add('approved');
+              if (mine){
+                const owner=userByName(entry.userName); num.style.background=owner?owner.color:'#999';
+                num.classList.add('mine'); num.title='Your stay';
+              } else if (state.me.isAdmin){
+                const owner=userByName(entry.userName); num.style.background=owner?owner.color:'#999';
+                num.title = entry.userName+' — approved';
+              } else {
+                num.style.background='var(--unavailable)'; num.title='Booked — not available';
+              }
+            } else if (entry.status==='pending'){
+              num.classList.add('pendingstate');
+              if (mine){ num.classList.add('mine'); num.title='Your request — pending approval'; }
+              else if (state.me.isAdmin){
+                const owner=userByName(entry.userName);
+                num.style.background = owner ? owner.color : '#999';
+                num.style.opacity = '0.55';
+                num.title = entry.userName+' — pending approval';
+              } else { num.title = 'Pending request — not yet available'; }
+            }
+          } else if (isInSelection(iso)){
+            num.classList.add('selecting');
+            if (iso===state.selection.startDate){ num.classList.add('start'); num.title='Start of your stay'; }
+            else num.title='Selected — not yet submitted';
+          }
+
+          if (interactive && !isPast) num.addEventListener('click', ()=>onDayClick(iso));
+          cellWrap.appendChild(num);
+        }
+        rowEl.appendChild(cellWrap);
+      }
+      grid.appendChild(rowEl);
+    }
+    monthEl.appendChild(grid);
+    wrap.appendChild(monthEl);
+  }
+}
+
+function onDayClick(iso){
+  const entry = bookingForDate(iso);
+
+  if (entry){
+    const mine = entry.userName === state.actingAs;
+    if (!mine){
+      if (!state.me.isAdmin){
+        const label = entry.status==='pending' ? 'pending approval' : 'already booked';
+        showMsg('error', `${entry.startDate} to ${entry.endDate} is ${label} — not available.`);
+        return;
+      }
+      if (!confirm(`${entry.startDate} to ${entry.endDate} is ${entry.status} for ${entry.userName}. Reassign this whole stay to ${state.actingAs}?`)) return;
+      doReassign(entry);
+      return;
+    }
+    if (state.me.isAdmin){
+      if (confirm(`${entry.status==='pending'?'Cancel':'Remove'} ${entry.userName}'s ${entry.status} stay (${entry.startDate} to ${entry.endDate})?`)) doCancel(entry.id);
+      return;
+    }
+    if (entry.status==='pending'){
+      if (confirm(`Withdraw your pending request for ${entry.startDate} to ${entry.endDate}?`)) doCancel(entry.id);
+    } else {
+      if (confirm(`Cancel your approved stay (${entry.startDate} to ${entry.endDate})?`)) doCancel(entry.id);
+    }
+    return;
+  }
+
+  const minStart = minBookableStart();
+  if (minStart && iso < minStart){
+    showMsg('error', 'Please check with our organisation whether you can still book tonight.');
+    return;
+  }
+
+  if (state.me.isAdmin && state.actingAs === OVERVIEW_MODE){
+    showMsg('error', 'Pick an investor in "Acting as" to book on their behalf — this view is just for looking.');
+    return;
+  }
+
+  if (!state.selection){
+    state.selection = { startDate: iso, nights: MIN_NIGHTS };
+  } else if (iso === state.selection.startDate){
+    state.selection = null;
+  } else if (iso > state.selection.startDate){
+    const wantNights = daysBetween(state.selection.startDate, iso) + 1;
+    const n = Math.max(MIN_NIGHTS, wantNights);
+    const endISO = addDaysISO(state.selection.startDate, n-1);
+    const conflict = conflictInRange(state.selection.startDate, endISO);
+    if (conflict){
+      showMsg('error', `Can't extend that far — ${conflict.userName}'s ${conflict.status} stay starts ${conflict.startDate}.`);
+    } else {
+      state.selection.nights = n;
+    }
+  } else {
+    state.selection = { startDate: iso, nights: MIN_NIGHTS };
+  }
+  renderMonths(); renderActionBar();
+}
+
+document.getElementById('nightsMinus').addEventListener('click', ()=>{
+  if (!state.selection || state.selection.nights<=MIN_NIGHTS) return;
+  state.selection.nights -= 1;
+  renderMonths(); renderActionBar();
+});
+document.getElementById('nightsPlus').addEventListener('click', ()=>{
+  if (!state.selection) return;
+  const nextEnd = addDaysISO(state.selection.startDate, state.selection.nights);
+  const conflict = conflictInRange(state.selection.startDate, nextEnd);
+  if (conflict){ showMsg('error', `Can't extend — ${conflict.userName}'s ${conflict.status} stay starts ${conflict.startDate}.`); return; }
+  state.selection.nights += 1;
+  renderMonths(); renderActionBar();
+});
+
+function renderActionBar(){
+  const bar = document.getElementById('actionBar');
+  const has = !!state.selection;
+  bar.classList.toggle('show', has);
+  if (!has) return;
+  const endISO = selectionEndDate();
+  document.getElementById('actionText').textContent = `${state.selection.startDate} → ${endISO}`;
+  document.getElementById('nightsCount').textContent = state.selection.nights;
+  document.getElementById('nightsMinus').disabled = state.selection.nights<=MIN_NIGHTS;
+  const nextEnd = addDaysISO(state.selection.startDate, state.selection.nights);
+  document.getElementById('nightsPlus').disabled = !!conflictInRange(state.selection.startDate, nextEnd);
+  document.getElementById('confirmBookBtn').textContent = state.me.isAdmin ? 'Book' : 'Submit for approval';
+}
+document.getElementById('clearSelectionBtn').addEventListener('click', ()=>{ state.selection=null; renderMonths(); renderActionBar(); });
+document.getElementById('confirmBookBtn').addEventListener('click', ()=>{
+  if (!state.selection) return;
+  doBook(state.selection.startDate, state.selection.nights, false);
+});
+
+async function doBook(startDate, nights, force){
+  const s = session();
+  const res = await apiPost({
+    action:'requestBooking', name:s.name||state.me.name, pin:s.pin,
+    actingAs:state.actingAs, houseId:state.currentHouseId, startDate, nights, force,
+  });
+  if (!res.ok){ showMsg('error', res.error || 'Could not submit.'); return; }
+  showMsg('info', res.status==='pending' ? 'Request submitted — awaiting admin approval.' : 'Booking saved.');
+  state.selection = null;
+  await loadData(); renderAll();
+}
+async function doCancel(id){
+  const s = session();
+  const res = await apiPost({ action:'cancel', name:s.name, pin:s.pin, id });
+  if (!res.ok){ showMsg('error', res.error || 'Could not cancel.'); return; }
+  showMsg('info', 'Done.');
+  await loadData(); renderAll();
+}
+async function doReassign(entry){
+  const s = session();
+  const nights = nightsOf(entry);
+  await apiPost({ action:'cancel', name:s.name, pin:s.pin, id:entry.id });
+  const res = await apiPost({
+    action:'requestBooking', name:s.name, pin:s.pin, actingAs:state.actingAs,
+    houseId:state.currentHouseId, startDate:entry.startDate, nights, force:true,
+  });
+  if (!res.ok){ showMsg('error', res.error || 'Could not reassign.'); await loadData(); renderAll(); return; }
+  showMsg('info', 'Reassigned.');
+  await loadData(); renderAll();
+}
+
+// ---------- Approvals page ----------
+async function loadApprovals(){
+  const s = session();
+  const res = await apiPost({action:'getPendingRequests', name:s.name, pin:s.pin});
+  const body = document.getElementById('approvalsBody');
+  const empty = document.getElementById('approvalsEmpty');
+  body.innerHTML='';
+  if (!res.ok){ showMsg('error', res.error||'Could not load requests.'); return; }
+  if (!res.requests.length){ empty.style.display='block'; return; }
+  empty.style.display='none';
+
+  res.requests.forEach(r=>{
+    const tr = document.createElement('tr');
+    const gapBefore = r.gapBeforeDays===null ? '—' : r.gapBeforeDays+' day'+(r.gapBeforeDays===1?'':'s');
+    const gapAfter = r.gapAfterDays===null ? '—' : r.gapAfterDays+' day'+(r.gapAfterDays===1?'':'s');
+    tr.innerHTML = `
+      <td>${r.houseName}</td>
+      <td>${r.userName}</td>
+      <td>${r.startDate} → ${r.endDate}<br><span style="color:var(--muted)">${r.nights} nights</span></td>
+      <td class="details-cell">
+        <b>${r.nightsLeftBefore}/${r.quota}</b> nights left before this request → <b>${r.nightsLeftAfter}</b> left if approved<br>
+        Gap before: <b>${gapBefore}</b> · Gap after: <b>${gapAfter}</b>
+      </td>
+      <td>${new Date(r.submittedAt).toLocaleDateString()}</td>
+      <td class="req-actions">
+        <button data-id="${r.id}" class="approveBtn">Approve</button>
+        <button data-id="${r.id}" class="danger rejectBtn">Reject</button>
+      </td>`;
+    body.appendChild(tr);
+  });
+
+  body.querySelectorAll('.approveBtn').forEach(b=>b.addEventListener('click', ()=>decide(b.dataset.id,'approved')));
+  body.querySelectorAll('.rejectBtn').forEach(b=>b.addEventListener('click', ()=>openRejectModal(b.dataset.id)));
+}
+
+async function decide(id, decision, note, sendEmail){
+  const s = session();
+  const payload = {action:'decideRequest', name:s.name, pin:s.pin, id, decision};
+  if (note) payload.note = note;
+  if (sendEmail) payload.sendEmail = true;
+  const res = await apiPost(payload);
+  if (!res.ok){ showMsg('error', res.error||'Could not update.'); return; }
+  showMsg('info', decision==='approved' ? 'Approved.' : 'Rejected.');
+  // decideRequest() changes a booking's status, but only loadApprovals()
+  // was being refreshed here — the Calendar's own state.bookings kept
+  // showing the old (pending) status until something else happened to
+  // reload it. Reported live: approved a stay, it still rendered faded/
+  // pending on the Calendar tab.
+  await loadData();
+  await loadApprovals();
+}
+
+// ---------- Reject modal (note + optional email) ----------
+let pendingRejectId = null;
+function openRejectModal(id){
+  pendingRejectId = id;
+  document.getElementById('rejectNoteInput').value = '';
+  document.getElementById('rejectSendEmailInput').checked = false;
+  document.getElementById('rejectOverlay').classList.add('show');
+}
+function closeRejectModal(){
+  document.getElementById('rejectOverlay').classList.remove('show');
+  pendingRejectId = null;
+}
+document.getElementById('rejectCloseBtn').addEventListener('click', closeRejectModal);
+document.getElementById('rejectCancelBtn').addEventListener('click', closeRejectModal);
+document.getElementById('rejectOverlay').addEventListener('click', (e)=>{ if (e.target.id==='rejectOverlay') closeRejectModal(); });
+document.getElementById('rejectConfirmBtn').addEventListener('click', async ()=>{
+  const id = pendingRejectId;
+  if (!id) return;
+  const note = document.getElementById('rejectNoteInput').value.trim();
+  const sendEmail = document.getElementById('rejectSendEmailInput').checked;
+  closeRejectModal();
+  await decide(id, 'rejected', note, sendEmail);
+});
+
+// ---------- Admin data page ----------
+async function loadAdminData(){
+  // Sequential on purpose, not Promise.all: Apps Script is noticeably less
+  // reliable when the same script gets hit by two concurrent requests, and
+  // this was the one place in the app that did that.
+  let res = await apiPostAdmin({action:'adminListUsers'});
+  if (!res.ok){
+    // fetchJson_ already retries transport-level failures; this covers the
+    // rarer case where Apps Script itself returns a bad result once. One
+    // extra attempt before bothering the admin with an error banner.
+    await new Promise(r=>setTimeout(r, 1200));
+    res = await apiPostAdmin({action:'adminListUsers'});
+  }
+  if (!res.ok){ showMsg('error', res.error||'Could not load admin data — try switching tabs and back.'); return; }
+  state.adminHouses = res.houses; state.adminUsers = res.users;
+  const bookingsRes = await apiPostAdmin({action:'adminListBookings'});
+  state.allBookings = bookingsRes.ok ? bookingsRes.bookings : [];
+  renderAdminView();
+}
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function renderAdminView(){
+  const housesBody = document.getElementById('housesBody'); housesBody.innerHTML='';
+  state.adminHouses.forEach(h=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${esc(h.id)}</td><td><input class="houseNameInput" value="${esc(h.name)}" style="width:100%;"></td>
+      <td class="req-actions"><button class="saveHouseBtn secondary">Save</button><button class="danger deleteHouseBtn">Delete</button></td>`;
+    tr.querySelector('.saveHouseBtn').addEventListener('click', async ()=>{
+      const name = tr.querySelector('.houseNameInput').value.trim();
+      const res = await apiPostAdmin({action:'adminUpdateHouse', houseId:h.id, houseName:name});
+      if (res.ok){ showBanner('info','Saved.'); await loadAdminData(); } else showBanner('error', res.error);
+    });
+    tr.querySelector('.deleteHouseBtn').addEventListener('click', async ()=>{
+      if (!confirm(`Delete "${h.name}"?`)) return;
+      const res = await apiPostAdmin({action:'adminDeleteHouse', houseId:h.id});
+      if (res.ok){ showBanner('info','Deleted.'); await loadAdminData(); await loadData(); renderAll(); } else showBanner('error', res.error);
+    });
+    housesBody.appendChild(tr);
+  });
+
+  const houseSelect2 = document.getElementById('newUserHouse');
+  houseSelect2.innerHTML = state.adminHouses.map(h=>`<option value="${esc(h.id)}">${esc(h.name)}</option>`).join('');
+
+  const usersBody = document.getElementById('usersBody'); usersBody.innerHTML='';
+  state.adminUsers.forEach(u=>{
+    const tr = document.createElement('tr');
+    const houseOpts = state.adminHouses.map(h=>`<option value="${esc(h.id)}" ${h.id===u.houseId?'selected':''}>${esc(h.name)}</option>`).join('');
+    tr.innerHTML = `
+      <td>${esc(u.name)}</td>
+      <td><input type="text" class="userEmailInput" value="${esc(u.email||'')}" placeholder="email" style="width:100%;"></td>
+      <td>${u.isAdmin ? '—' : `<select class="userHouseSelect">${houseOpts}</select>`}</td>
+      <td><input type="color" class="userColorInput" value="${esc(u.color)}"></td>
+      <td><input type="checkbox" class="userAdminCheckbox" ${u.isAdmin?'checked':''}></td>
+      <td><input type="number" class="userQuotaInput" value="${u.quotaNights}" style="width:80px;" ${u.isAdmin?'disabled':''}></td>
+      <td>${u.isAdmin ? '—' : quotaBadgeText(u.approvedNightsThisYear, u.pendingNightsThisYear, u.quotaNights)}</td>
+      <td class="req-actions">
+        <button class="saveUserBtn secondary">Save</button>
+        <button class="resetPinBtn secondary">Reset PIN</button>
+        <button class="danger deleteUserBtn">Delete</button>
+      </td>`;
+    tr.querySelector('.saveUserBtn').addEventListener('click', async ()=>{
+      const houseSel = tr.querySelector('.userHouseSelect');
+      const email = tr.querySelector('.userEmailInput').value.trim();
+      const color = tr.querySelector('.userColorInput').value;
+      const isAdmin = tr.querySelector('.userAdminCheckbox').checked;
+      const quotaNights = Number(tr.querySelector('.userQuotaInput').value)||0;
+      const payload = { action:'adminUpdateUser', targetName:u.name, color, isAdmin, quotaNights, email };
+      if (houseSel) payload.houseId = houseSel.value;
+      const res = await apiPostAdmin(payload);
+      if (res.ok){ showBanner('info','Saved.'); await loadAdminData(); await loadData(); renderAll(); } else showBanner('error', res.error);
+    });
+    tr.querySelector('.resetPinBtn').addEventListener('click', async ()=>{
+      const newPin = prompt(`New PIN for ${u.name}:`);
+      if (!newPin) return;
+      const res = await apiPostAdmin({action:'adminResetPin', targetName:u.name, newPin});
+      if (res.ok) showBanner('info','PIN reset.'); else showBanner('error', res.error);
+    });
+    tr.querySelector('.deleteUserBtn').addEventListener('click', async ()=>{
+      if (!confirm(`Delete ${u.name}? Their existing bookings will remain but won't be manageable via their login.`)) return;
+      const res = await apiPostAdmin({action:'adminDeleteUser', targetName:u.name});
+      if (res.ok){ showBanner('info','Deleted.'); await loadAdminData(); await loadData(); renderAll(); } else showBanner('error', res.error);
+    });
+    usersBody.appendChild(tr);
+  });
+
+  const allBody = document.getElementById('allBookingsBody');
+  const allEmpty = document.getElementById('allBookingsEmpty');
+  allBody.innerHTML = '';
+  if (!state.allBookings.length){
+    allEmpty.style.display = 'block';
+  } else {
+    allEmpty.style.display = 'none';
+    state.allBookings.forEach(b=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${esc(b.houseName)}</td>
+        <td>${esc(b.userName)}</td>
+        <td>${b.startDate} → ${b.endDate}<br><span style="color:var(--muted)">${b.nights} nights</span></td>
+        <td>${esc(b.status)}</td>
+        <td>${b.createdAt ? new Date(b.createdAt).toLocaleDateString() : '—'}</td>
+        <td>${b.decidedAt ? new Date(b.decidedAt).toLocaleDateString() : '—'}</td>`;
+      allBody.appendChild(tr);
+    });
+  }
+}
+
+document.getElementById('newUserIsAdmin').addEventListener('change', (e)=>{
+  document.getElementById('newUserHouse').disabled = e.target.checked;
+  document.getElementById('newUserQuota').disabled = e.target.checked;
+});
+document.getElementById('addHouseBtn').addEventListener('click', async ()=>{
+  const houseId = document.getElementById('newHouseId').value.trim();
+  const houseName = document.getElementById('newHouseName').value.trim();
+  const res = await apiPostAdmin({action:'adminAddHouse', houseId, houseName});
+  if (res.ok){
+    showBanner('info','Added.');
+    document.getElementById('newHouseId').value=''; document.getElementById('newHouseName').value='';
+    await loadAdminData();
+  } else showBanner('error', res.error);
+});
+document.getElementById('addUserBtn').addEventListener('click', async ()=>{
+  const userName = document.getElementById('newUserName').value.trim();
+  const email = document.getElementById('newUserEmail').value.trim();
+  const houseId = document.getElementById('newUserHouse').value;
+  const color = document.getElementById('newUserColor').value;
+  const quotaNights = Number(document.getElementById('newUserQuota').value)||0;
+  const newUserPin = document.getElementById('newUserPin').value.trim();
+  const isAdmin = document.getElementById('newUserIsAdmin').checked;
+  const res = await apiPostAdmin({action:'adminAddUser', userName, email, houseId, color, quotaNights, newUserPin, isAdmin});
+  if (res.ok){
+    showBanner('info','Added.');
+    document.getElementById('newUserName').value=''; document.getElementById('newUserEmail').value=''; document.getElementById('newUserPin').value='';
+    document.getElementById('newUserIsAdmin').checked=false;
+    document.getElementById('newUserHouse').disabled=false; document.getElementById('newUserQuota').disabled=false;
+    await loadAdminData();
+  } else showBanner('error', res.error);
+});
+
+// Outcome popups for the calendar/booking/approvals flow — these used to be
+// an easy-to-miss inline banner that auto-cleared after 5s; reported as
+// "not visible at all". Stays open until manually closed (X, or clicking
+// outside the box). Optional onClose lets callers chain a follow-up (used
+// to show approve/reject notifications one at a time).
+let popupOnClose = null;
+function showMsg(type, text, onClose){
+  document.getElementById('popupBox').className = 'popup-box ' + type;
+  document.getElementById('popupText').textContent = text;
+  document.getElementById('popupOverlay').classList.add('show');
+  popupOnClose = onClose || null;
+}
+function closePopup(){
+  document.getElementById('popupOverlay').classList.remove('show');
+  const cb = popupOnClose; popupOnClose = null;
+  if (cb) cb();
+}
+document.getElementById('popupCloseBtn').addEventListener('click', closePopup);
+document.getElementById('popupOverlay').addEventListener('click', (e)=>{ if (e.target.id==='popupOverlay') closePopup(); });
+
+// Lightweight inline banner, kept only for frequent low-stakes admin-tab
+// CRUD feedback (Saved/Deleted/etc.) where a modal popup per click would be
+// disruptive when editing several rows in a row.
+function showBanner(type, text){
+  const el = document.getElementById('msgBanner');
+  el.className='msg-banner '+type; el.textContent=text;
+  clearTimeout(showBanner._t);
+  showBanner._t = setTimeout(()=>{ el.className='msg-banner'; el.textContent=''; }, 5000);
+}
+
+</script>
+</body>
+</html>
